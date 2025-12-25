@@ -20,9 +20,10 @@ st.set_page_config(
 # ================= HIDE STREAMLIT STYLE =================
 hide_st_style = """
             <style>
-            #MainMenu {visibility: hidden;}
-            footer {visibility: hidden;}
-            header {visibility: hidden;}
+            #MainMenu {visibility: hidden !important;}
+            footer {visibility: hidden !important;}
+            header {visibility: hidden !important;}
+            .stDeployButton {display:none !important;}
             </style>
             """
 st.markdown(hide_st_style, unsafe_allow_html=True)
