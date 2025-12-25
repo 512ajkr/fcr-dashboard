@@ -20,26 +20,21 @@ st.set_page_config(
 # ================= HIDE STREAMLIT STYLE =================
 hide_st_style = """
 <style>
-    /* Hide the top main menu (Hamburger) */
-    #MainMenu {visibility: hidden;}
+    /* 1. Hide the hamburger menu */
+    #MainMenu {visibility: hidden !important; display: none !important;}
     
-    /* Hide the footer (Made with Streamlit) */
-    footer {visibility: hidden;}
+    /* 2. Hide the footer (Made with Streamlit) */
+    footer {visibility: hidden !important; display: none !important;}
     
-    /* Hide the top header bar */
-    header {visibility: hidden;}
+    /* 3. Hide the header decoration */
+    header {visibility: hidden !important; display: none !important;}
     
-    /* Hide the deploy button (if visible) */
-    .stDeployButton {display:none;}
+    /* 4. Hide the specific "Hosted with Streamlit" badge */
+    /* This targets the container that holds the badge */
+    .viewerBadge_container__1QSob {display: none !important;}
     
-    /* Hide the toolbar (for newer Streamlit versions) */
-    [data-testid="stToolbar"] {visibility: hidden !important;}
-    
-    /* Hide the colored decoration bar at the top */
-    [data-testid="stDecoration"] {visibility: hidden !important;}
-    
-    /* Hide the status widget (running animation) */
-    [data-testid="stStatusWidget"] {visibility: hidden !important;}
+    /* 5. General catch-all for the footer container */
+    div[data-testid="stDecoration"] {display: none !important;}
 </style>
 """
 st.markdown(hide_st_style, unsafe_allow_html=True)
