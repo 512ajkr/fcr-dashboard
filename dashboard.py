@@ -17,6 +17,16 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# ================= HIDE STREAMLIT STYLE =================
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # ================= FIREBASE CONNECTION =================
 def get_db():
     """Connect to Firebase securely using Streamlit Secrets."""
