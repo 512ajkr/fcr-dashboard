@@ -19,13 +19,29 @@ st.set_page_config(
 
 # ================= HIDE STREAMLIT STYLE =================
 hide_st_style = """
-            <style>
-            #MainMenu {visibility: hidden !important;}
-            footer {visibility: hidden !important;}
-            header {visibility: hidden !important;}
-            .stDeployButton {display:none !important;}
-            </style>
-            """
+<style>
+    /* Hide the top main menu (Hamburger) */
+    #MainMenu {visibility: hidden;}
+    
+    /* Hide the footer (Made with Streamlit) */
+    footer {visibility: hidden;}
+    
+    /* Hide the top header bar */
+    header {visibility: hidden;}
+    
+    /* Hide the deploy button (if visible) */
+    .stDeployButton {display:none;}
+    
+    /* Hide the toolbar (for newer Streamlit versions) */
+    [data-testid="stToolbar"] {visibility: hidden !important;}
+    
+    /* Hide the colored decoration bar at the top */
+    [data-testid="stDecoration"] {visibility: hidden !important;}
+    
+    /* Hide the status widget (running animation) */
+    [data-testid="stStatusWidget"] {visibility: hidden !important;}
+</style>
+"""
 st.markdown(hide_st_style, unsafe_allow_html=True)
 
 # ================= FIREBASE CONNECTION =================
