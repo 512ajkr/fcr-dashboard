@@ -17,47 +17,27 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ================= HIDE STREAMLIT STYLE =================
-hide_st_style = """
-<style>
-    /* 1. Hide the hamburger menu */
-    #MainMenu {visibility: hidden !important; display: none !important;}
-    
-    /* 2. Hide the footer (Made with Streamlit) */
-    footer {visibility: hidden !important; display: none !important;}
-    
-    /* 3. Hide the header decoration */
-    header {visibility: hidden !important; display: none !important;}
-    
-    /* 4. Hide the specific "Hosted with Streamlit" badge */
-    /* This targets the container that holds the badge */
-    .viewerBadge_container__1QSob {display: none !important;}
-    
-    /* 5. General catch-all for the footer container */
-    div[data-testid="stDecoration"] {display: none !important;}
-</style>
-"""
-st.markdown(hide_st_style, unsafe_allow_html=True)
-
 # ================= FIREBASE CONNECTION =================
 def get_db():
     """Connect to Firebase securely using Streamlit Secrets."""
-    if not firebase_admin._apps:
-        # Check if secrets are available
-        if "firebase" in st.secrets:
-            # Create a dictionary from secrets and fix the newlines in private key
-            key_dict = dict(st.secrets["firebase"])
-            key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
-            
-            cred = credentials.Certificate(key_dict)
-            firebase_admin.initialize_app(cred)
-        else:
-            st.error("❌ Firebase Credentials missing! Please add [firebase] to .streamlit/secrets.toml")
-            return None
-    return firestore.client()
+    try:
+        if not firebase_admin._apps:
+            # Check if secrets are available
+            if "firebase" in st.secrets:
+                # Create a dictionary from secrets and fix the newlines in private key
+                key_dict = dict(st.secrets["firebase"])
+                key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
+                
+                cred = credentials.Certificate(key_dict)
+                firebase_admin.initialize_app(cred)
+            else:
+                return None
+        return firestore.client()
+    except Exception:
+        return None
 
-# ================= CONFIGURATION MANAGEMENT (FIREBASE) =================
-# Default URLs (Fallbacks used only if database is empty or connection fails)
+# ================= CONFIGURATION MANAGEMENT =================
+# Default URLs (Fallbacks)
 DEFAULT_URLS = {
     "ARASIKERE": {
         "dashboard_url": "https://arvindgroup-my.sharepoint.com/:x:/g/personal/gedshirts_consultant_arvind_in/IQDTVZTVcdtOR7ybfN3eIpoIAWe7c7bBJCchZmw2vZNKgqs?e=ghJlMW&download=1",
@@ -65,7 +45,7 @@ DEFAULT_URLS = {
     },
     "RANCHI": {
         "dashboard_url": "https://arvindgroup-my.sharepoint.com/:x:/g/personal/gedshirts_consultant_arvind_in/IQCkdQtFfWX-Q7TFJS4LEm2vAfbJShQrsi48PbatXXJ03Ms?e=eskvlI&download=1",
-        "excel_url": ""
+        "excel_url": "" 
     },
     "INDORE": {
         "dashboard_url": "https://arvindgroup-my.sharepoint.com/:x:/g/personal/gedshirts_consultant_arvind_in/IQCMvYuFTGY5SYl-VS7Fg70AATSU9eGqXevKDKSLc2V-3aI?e=CtZ4A5&download=1",
@@ -87,11 +67,9 @@ def load_config():
             if doc.exists:
                 return doc.to_dict()
             else:
-                # If document doesn't exist, create it with defaults
                 save_config(DEFAULT_URLS)
                 return DEFAULT_URLS
-    except Exception as e:
-        st.warning(f"⚠️ Using default config (Offline/Error): {e}")
+    except Exception:
         return DEFAULT_URLS
     return DEFAULT_URLS
 
@@ -102,10 +80,10 @@ def save_config(data):
         if db:
             doc_ref = db.collection("settings").document("unit_config")
             doc_ref.set(data)
-    except Exception as e:
-        st.error(f"❌ Failed to save to Cloud: {e}")
+    except Exception:
+        pass
 
-# Initialize Session State for Admin
+# Initialize Session State
 if 'admin_logged_in' not in st.session_state:
     st.session_state.admin_logged_in = False
 if 'show_login' not in st.session_state:
@@ -137,19 +115,6 @@ div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
     color: #0284c7 !important;
 }
 
-/* ================= KPI Cards ================= */
-.metric-container {
-    background: #ffffff;
-    padding: 16px;
-    border-radius: 14px;
-    border: 1px solid #000000;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-    margin-bottom: 10px;
-}
-.metric-label { font-size: 13px; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; color:black; opacity:0.7;}
-.metric-value { font-size: 24px; font-weight: 800; color:black; }
-.metric-sub { font-size: 13px; font-weight: 600; margin-top: 4px; color:black; opacity:0.8;}
-
 /* ================= Top Ribbon ================= */
 .top-ribbon {
     background: linear-gradient(90deg, #0284c7, #0ea5e9, #22d3ee);
@@ -163,7 +128,69 @@ div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
 .ribbon-title { font-size: 32px; font-weight: 800; }
 .ribbon-time { font-size: 14px; opacity: 0.9; margin-top: 5px; font-weight: 500; }
 
-/* ================= GRAPH STYLING (White BG + Black Border) ================= */
+/* ================= NEW GROUP CARD STYLING ================= */
+.group-card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+    border: 2px solid #38bdf8; 
+    height: 100%;
+    transition: all 0.3s ease;
+}
+
+/* 🔥 ALERT ANIMATION KEYFRAMES (RED GLOW) */
+@keyframes flashRed {
+    0% { border-color: #38bdf8; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    50% { border-color: #dc2626; box-shadow: 0 0 15px rgba(220, 38, 38, 0.6); } /* Red Glow */
+    100% { border-color: #38bdf8; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+}
+
+/* Class to trigger the animation */
+.alert-card {
+    /* Runs 3 TIMES (1s each cycle = 3s total duration) */
+    animation: flashRed 1s ease-in-out 3; 
+}
+
+.group-header {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0c4a6e; /* Dark Blue Header */
+    text-transform: uppercase;
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 10px;
+    margin-bottom: 15px;
+    letter-spacing: 0.5px;
+    text-align: center;
+}
+
+.metric-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #f1f5f9;
+    position: relative; /* For tooltip positioning */
+}
+.metric-row:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.m-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748b; /* Slate Gray */
+}
+
+.m-value {
+    font-size: 18px;
+    font-weight: 800;
+    text-align: right;
+}
+
+/* ================= GRAPH STYLING ================= */
 .stPlotlyChart {
     background: #ffffff !important;
     border-radius: 20px !important;
@@ -256,7 +283,7 @@ def toggle_login():
 
 # ================= LAYOUT LOGIC =================
 
-# 1. Load Configuration (FROM FIREBASE)
+# 1. Load Configuration
 UNIT_URLS = load_config()
 
 # 2. Layout Structure
@@ -414,6 +441,8 @@ else:
         sum_rcvd = dff['FAB RCVD'].sum()
         sum_used = dff['FABRIC USED'].sum() if 'FABRIC USED' in dff.columns else 0
         sum_stock = dff['FABRIC LEFTOVER STOCK'].sum()
+        
+        # Avoid Zero Division
         avg_cancut_p = dff['CAN CUT %'].mean()*100 if not dff.empty else 0
         avg_cut_p = dff['CUT %'].mean()*100 if not dff.empty else 0
         avg_std = dff['STD Cons'].mean() if not dff.empty else 0
@@ -430,61 +459,86 @@ else:
         
         def fmt(v): return str(v) if v>0 else "--"
 
-        # KPI Logic
-        def card(title, val_str, sub_text, color, filled=False, border_color=None):
-            if filled:
-                b_col = border_color if border_color else color
-                st.markdown(f"""
-                <div class="metric-container filled-card" style="background-color: {color}; border-left: 8px solid {b_col};">
-                    <div class="metric-label">{title}</div>
-                    <div class="metric-value">{val_str}</div>
-                    <div class="metric-sub">{sub_text}</div>
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown(f"""
-                <div class="metric-container" style="border-left: 6px solid {color};">
-                    <div class="metric-label">{title}</div>
-                    <div class="metric-value">{val_str}</div>
-                    <div class="metric-sub" style="color:{color};">{sub_text}</div>
-                </div>
-                """, unsafe_allow_html=True)
+        # Color Text Constants
+        txt_green = "#16a34a" # Emerald Green
+        txt_red = "#dc2626"   # Red
+        txt_amber = "#d97706" # Amber
+        txt_black = "#1e293b" # Dark Blue/Black
+        
+        # --- Logic for Text Colors ---
+        # Quantity
+        cp_color = txt_green if perf_cut >= 100 else txt_red
+        ord_color = txt_green 
+        cc_color = txt_green if avg_cancut_p > 100 else (txt_amber if avg_cancut_p == 100 else txt_red)
+        cut_color = txt_green if avg_cut_p >= avg_cancut_p else txt_red
 
-        c_red_bg, c_red_bd = "#fca5a5", "#e11d48"
-        c_yel_bg, c_yel_bd = "#fcd34d", "#b45309"
-        c_grn_bg, c_grn_bd = "#6ee7b7", "#047857"
+        # Fabric
+        req_color = txt_black
+        rcvd_color = txt_green if sum_rcvd >= sum_req else txt_red
+        used_color = txt_black
+        stock_color = txt_green if sum_stock >= 0 else txt_red
 
-        # Color Logic
-        cp_bg, cp_bd = (c_grn_bg, c_grn_bd) if perf_cut >= 100 else (c_red_bg, c_red_bd)
-        cc_bg, cc_bd = (c_grn_bg, c_grn_bd) if avg_cancut_p > 100 else ((c_yel_bg, c_yel_bd) if avg_cancut_p == 100 else (c_red_bg, c_red_bd))
-        cut_bg, cut_bd = (c_grn_bg, c_grn_bd) if avg_cut_p >= avg_cancut_p else (c_red_bg, c_red_bd)
-        rcvd_bg, rcvd_bd = (c_grn_bg, c_grn_bd) if sum_rcvd >= sum_req else (c_red_bg, c_red_bd)
-        cad_bg, cad_bd = (c_grn_bg, c_grn_bd) if avg_cad <= avg_std else (c_red_bg, c_red_bd)
-        ach_bg, ach_bd = (c_grn_bg, c_grn_bd) if avg_ach <= avg_std else (c_red_bg, c_red_bd)
-        stock_bg, stock_bd = (c_grn_bg, c_grn_bd) if sum_stock >= 0 else (c_red_bg, c_red_bd)
-        cons_bg, cons_bd = (c_red_bg, c_red_bd) if perf_cons > 0 else (c_grn_bg, c_grn_bd)
+        # Consumption
+        std_color = txt_black
+        cad_color = txt_green if avg_cad <= avg_std else txt_red
+        ach_color = txt_green if avg_ach <= avg_std else txt_red
+        cons_color = txt_red if perf_cons > 0 else txt_green
 
-        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+        # --- ALERT FLAGS (Trigger if ANY value in the card is RED) ---
+        # Checks if any of the text colors assigned to the metrics equal the red constant
+        alert_qty = (cp_color == txt_red) or (cc_color == txt_red) or (cut_color == txt_red)
+        alert_fab = (rcvd_color == txt_red) or (stock_color == txt_red)
+        alert_cons = (cad_color == txt_red) or (ach_color == txt_red) or (cons_color == txt_red)
 
-        # GRID
-        r1 = st.columns(4)
-        with r1[0]: card("Can Cut Performance", f"{perf_cut:,.2f}%", "", cp_bg, filled=True, border_color=cp_bd)
-        with r1[1]: card("Order Qty", f"{sum_ord:,.0f}", "", c_grn_bg, filled=True, border_color=c_grn_bd)
-        with r1[2]: card("Can Cut Qty", f"{sum_cancut:,.0f} ({avg_cancut_p:.2f}%)", "", cc_bg, filled=True, border_color=cc_bd)
-        with r1[3]: card("Cut Qty", f"{sum_cut:,.0f} ({avg_cut_p:.2f}%)", "", cut_bg, filled=True, border_color=cut_bd)
+        # Helper to Render Group Card
+        def render_group_card(title, metrics, alert_trigger=False):
+            # metrics is list of tuples: (label, value_str, color_hex, tooltip_text)
+            rows_html = ""
+            for lbl, val, col, tooltip in metrics:
+                # Added 'title' attribute for hover tooltip
+                rows_html += f'<div class="metric-row" title="{tooltip}"><span class="m-label">{lbl}</span><span class="m-value" style="color: {col};">{val}</span></div>'
+            
+            # If alert_trigger is True, add the 'alert-card' class
+            card_class = "group-card alert-card" if alert_trigger else "group-card"
+            
+            st.markdown(f"""
+            <div class="{card_class}">
+                <div class="group-header">{title}</div>
+                {rows_html}
+            </div>
+            """, unsafe_allow_html=True)
 
-        r2 = st.columns(4)
-        with r2[0]: card("Fabric Required", f"{sum_req:,.2f}", "", c_grn_bg, filled=True, border_color=c_grn_bd)
-        with r2[1]: card("Fabric Received", f"{sum_rcvd:,.2f} ({perf_rcvd:.2f}%)", "", rcvd_bg, filled=True, border_color=rcvd_bd)
-        with r2[2]: card("Fabric Used", f"{sum_used:,.2f}", "", c_grn_bg, filled=True, border_color=c_grn_bd)
-        with r2[3]: card("Fabric Leftover", f"{sum_stock:,.2f}", "", stock_bg, filled=True, border_color=stock_bd)
+        st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
-        r3 = st.columns(4)
-        with r3[0]: card("STD Cons", f"{avg_std:.3f}", "", c_grn_bg, filled=True, border_color=c_grn_bd)
-        with r3[1]: card("CAD Cons", f"{avg_cad:.3f}", "", cad_bg, filled=True, border_color=cad_bd)
-        with r3[2]: card("Factory Achieved Cons", f"{avg_ach:.3f}", "", ach_bg, filled=True, border_color=ach_bd)
-        sym = "+" if perf_cons > 0 else ""
-        with r3[3]: card("Cons Performance", f"{sym}{perf_cons:.3f}", "", cons_bg, filled=True, border_color=cons_bd)
+        # === NEW LAYOUT: 3 BIG CARDS IN ONE ROW ===
+        c_qty, c_fab, c_cons = st.columns(3)
+
+        with c_qty:
+            render_group_card("Quantity", [
+                ("Can Cut Performance", f"{perf_cut:,.2f}%", cp_color, "Formula: (Total Cut Qty / Total Can Cut Qty) * 100"),
+                ("Order Qty", f"{sum_ord:,.0f}", ord_color, "Total Order Quantity of selected filters"),
+                ("Can Cut Qty", f"{sum_cancut:,.0f} ({avg_cancut_p:.2f}%)", cc_color, "Total Quantity feasible to cut based on Fabric Availability"),
+                ("Cut Qty", f"{sum_cut:,.0f} ({avg_cut_p:.2f}%)", cut_color, "Total Actual Cut Quantity produced")
+            ], alert_trigger=alert_qty)
+
+        with c_fab:
+            render_group_card("Fabric", [
+                ("Fabric Required", f"{sum_req:,.2f}", req_color, "Total Fabric Required for orders"),
+                ("Fabric Received", f"{sum_rcvd:,.2f} ({perf_rcvd:.2f}%)", rcvd_color, "Total Fabric Received from store (Percentage of Required)"),
+                ("Fabric Used", f"{sum_used:,.2f}", used_color, "Total Fabric consumed in cutting"),
+                ("Fabric Leftover", f"{sum_stock:,.2f}", stock_color, "Fabric Remaining Stock (Received - Used)")
+            ], alert_trigger=alert_fab)
+
+        with c_cons:
+            sym = "+" if perf_cons > 0 else ""
+            render_group_card("Consumption", [
+                ("STD Cons", f"{avg_std:.3f}", std_color, "Average Standard Consumption (Budgeted)"),
+                ("CAD Cons", f"{avg_cad:.3f}", cad_color, "Average CAD Consumption (Marker Plan)"),
+                ("Factory Achieved Cons", f"{avg_ach:.3f}", ach_color, "Average Actual Consumption on Floor"),
+                ("Cons Performance", f"{sym}{perf_cons:.3f}", cons_color, "Difference: Achieved Cons - STD Cons (Positive means excess usage)")
+            ], alert_trigger=alert_cons)
+
+        st.markdown("<div style='height:25px'></div>", unsafe_allow_html=True)
 
         # Exception & Chart
         c1, c2 = st.columns([1, 2])
