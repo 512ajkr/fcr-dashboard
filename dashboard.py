@@ -56,11 +56,20 @@ DEFAULT_URLS = {
 @st.cache_resource
 def get_db():
     try:
-        # Check if app is already initialized to prevent errors on rerun
         if not firebase_admin._apps:
-            # REPLACE 'firebase_key.json' with your actual key file path
-            # OR use: cred = credentials.Certificate(dict(st.secrets["firebase"]))
-            cred = credentials.Certificate("firebase_key.json") 
+            # 1. Try to load from Streamlit Cloud Secrets (for the website)
+            if "firebase" in st.secrets:
+                key_dict = dict(st.secrets["firebase"])
+                cred = credentials.Certificate(key_dict)
+            
+            # 2. Fallback: Try to load from local file (for your VS Code testing)
+            elif os.path.exists("firebase_key.json"):
+                cred = credentials.Certificate("firebase_key.json")
+            
+            else:
+                st.error("❌ Firebase Key not found. Please check Secrets on Streamlit Cloud.")
+                return None
+
             firebase_admin.initialize_app(cred)
         return firestore.client()
     except Exception as e:
