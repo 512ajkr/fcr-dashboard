@@ -6,8 +6,21 @@ import requests
 from io import BytesIO
 import json
 import os
+import sys
+import subprocess
 import firebase_admin
+import streamlit.components.v1 as components
 from firebase_admin import credentials, firestore
+
+# --- AUTO-INSTALLER BLOCK ---
+# This forces installation into the CURRENT Python environment
+try:
+    from streamlit_autorefresh import st_autorefresh
+except ImportError:
+    # If the import fails, install it immediately using the current python executable
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-autorefresh"])
+    from streamlit_autorefresh import st_autorefresh
+# ---------------------------
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
@@ -17,25 +30,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# ================= FIREBASE CONNECTION =================
-def get_db():
-    """Connect to Firebase securely using Streamlit Secrets."""
-    try:
-        if not firebase_admin._apps:
-            # Check if secrets are available
-            if "firebase" in st.secrets:
-                # Create a dictionary from secrets and fix the newlines in private key
-                key_dict = dict(st.secrets["firebase"])
-                key_dict["private_key"] = key_dict["private_key"].replace("\\n", "\n")
-                
-                cred = credentials.Certificate(key_dict)
-                firebase_admin.initialize_app(cred)
-            else:
-                return None
-        return firestore.client()
-    except Exception:
-        return None
-
+# 🔄 AUTO-REFRESH: Runs every 15 minutes
+st_autorefresh(interval=15 * 60 * 1000, key="datarefresh")
 # ================= CONFIGURATION MANAGEMENT =================
 # Default URLs (Fallbacks)
 DEFAULT_URLS = {
@@ -56,6 +52,20 @@ DEFAULT_URLS = {
         "excel_url": ""
     }
 }
+
+@st.cache_resource
+def get_db():
+    try:
+        # Check if app is already initialized to prevent errors on rerun
+        if not firebase_admin._apps:
+            # REPLACE 'firebase_key.json' with your actual key file path
+            # OR use: cred = credentials.Certificate(dict(st.secrets["firebase"]))
+            cred = credentials.Certificate("firebase_key.json") 
+            firebase_admin.initialize_app(cred)
+        return firestore.client()
+    except Exception as e:
+        st.error(f"Firebase Error: {e}")
+        return None
 
 def load_config():
     """Load URLs from Firebase Firestore."""
@@ -88,6 +98,9 @@ if 'admin_logged_in' not in st.session_state:
     st.session_state.admin_logged_in = False
 if 'show_login' not in st.session_state:
     st.session_state.show_login = False
+
+if 'show_summary' not in st.session_state:
+    st.session_state.show_summary = False
 
 # ================= CUSTOM CSS =================
 st.markdown("""
@@ -428,10 +441,14 @@ else:
 
             with f5:
                 st.markdown("<div style='height:35px'></div>", unsafe_allow_html=True)
+                
+                # Button 1: Refresh
                 if st.button("🔄 Refresh", use_container_width=True):
                     st.cache_data.clear()
                     st.session_state.active_exception_view = None
                     st.rerun()
+
+                
 
         # Calculations
         sum_cut = dff['CUT QTY'].sum()
@@ -545,23 +562,19 @@ else:
         with c1:
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             def render_centered_card(bg_class, title, count, btn_key, view_id):
-                st.markdown(f"""
-                <div class="exception-card-container {bg_class}">
-                    <div class="ex-text-group">
-                        <div class="ex-lbl">{title}</div>
-                        <div class="ex-val">{count}</div>
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(f'<div class="exception-card-container {bg_class}"><div class="ex-text-group"><div class="ex-lbl">{title}</div><div class="ex-val">{count}</div></div></div>', unsafe_allow_html=True)
                 st.markdown('<div class="info-btn-css">', unsafe_allow_html=True)
-                if st.button("ⓘ", key=btn_key):
-                     st.session_state.active_exception_view = view_id
-                st.markdown('</div>', unsafe_allow_html=True)
-                st.markdown('<div class="spacer-area"></div>', unsafe_allow_html=True)
+                if st.button("ⓘ", key=btn_key): st.session_state.active_exception_view = view_id
+                st.markdown('</div><div class="spacer-area"></div>', unsafe_allow_html=True)
 
             render_centered_card("bg-indigo", "CUT% < 100%", fmt(ex1_count), "btn_ex1", "ex1")
             render_centered_card("bg-cyan", "CAN CUT% < 100%", fmt(ex2_count), "btn_ex2", "ex2")
             render_centered_card("bg-green", "CUT% < CAN CUT%", fmt(ex3_count), "btn_ex3", "ex3")
+            
+            # --- SUMMARY BUTTON ---
+            st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+            if st.button("📋 View All Units Summary", use_container_width=True):
+                st.session_state.show_summary = True
 
         with c2:
             if 'BUYER' in dff.columns and not dff.empty:
@@ -619,6 +632,16 @@ else:
         # Detail Table
         if st.session_state.active_exception_view:
             st.markdown("---")
+            st.markdown('<div id="summary_target"></div>', unsafe_allow_html=True)
+            components.html(
+                """
+                <script>
+                    window.parent.document.getElementById("summary_target").scrollIntoView({behavior: "smooth", block: "start"});
+                </script>
+                """,
+                height=0,
+                width=0
+            )
             detail_df = pd.DataFrame()
             view_title = ""
             view_color = ""
@@ -677,3 +700,134 @@ else:
                 )
             else:
                 st.success("✅ No exceptions found!")
+
+        # ----------------------------------------------------------------
+        # 🔥 GLOBAL SUMMARY TABLE (WITH STATUS FILTER)
+        # ----------------------------------------------------------------
+        if st.session_state.show_summary:
+            st.markdown("---")
+            st.markdown('<div id="summary_target"></div>', unsafe_allow_html=True)
+            components.html(
+                """
+                <script>
+                    window.parent.document.getElementById("summary_target").scrollIntoView({behavior: "smooth", block: "start"});
+                </script>
+                """,
+                height=0,
+                width=0
+            )
+            st.subheader("🌍 All Units Summary Report")
+            
+            with st.spinner("Compiling data from all units..."):
+                all_units_data = {}
+                all_months = set()
+                all_weeks = set()
+                all_statuses = set()
+                
+                # 1. LOAD DATA & EXTRACT FILTERS
+                for unit_name, config in UNIT_URLS.items():
+                    u_url = config.get("dashboard_url", "") if isinstance(config, dict) else str(config)
+                    u_df = load_data(u_url) # Cached
+                    
+                    if not u_df.empty:
+                        all_units_data[unit_name] = u_df
+                        
+                        # Collect Months
+                        months = u_df['MONTH_STR'].dropna().unique()
+                        all_months.update([m for m in months if m != "N/A"])
+                        
+                        # Collect Weeks (Format as "WEEK X")
+                        if 'WEEK_NUM' in u_df.columns:
+                            valid_w = u_df['WEEK_NUM'].dropna()
+                            formatted_weeks = [f"WEEK {int(w)}" for w in valid_w if w > 0]
+                            all_weeks.update(formatted_weeks)
+
+                        # Collect Status
+                        if 'STATUS' in u_df.columns:
+                            statuses = u_df['STATUS'].dropna().unique()
+                            all_statuses.update([str(s) for s in statuses])
+                
+                # 2. DEFAULT SELECTION LOGIC
+                curr_date = datetime.now()
+                
+                # Month Default
+                curr_month_str = curr_date.strftime('%b-%y').upper()
+                default_month = [curr_month_str] if curr_month_str in all_months else []
+                
+                # Week Default
+                curr_week_num = curr_date.isocalendar()[1]
+                curr_week_str = f"WEEK {curr_week_num}"
+                default_week = [curr_week_str] if curr_week_str in all_weeks else []
+
+                # Status Default
+                default_status = ["Completed"] if "Completed" in all_statuses else []
+
+                # 3. RENDER FILTERS (3 Columns)
+                sf1, sf2, sf3 = st.columns(3)
+                with sf1:
+                    summ_sel_month = st.multiselect("Select Month(s)", sorted(list(all_months)), default=default_month)
+                with sf2:
+                    sorted_weeks = sorted(list(all_weeks), key=lambda x: int(x.split(' ')[1]) if ' ' in x else 0)
+                    summ_sel_week = st.multiselect("Select Week(s)", sorted_weeks, default=default_week)
+                with sf3:
+                    summ_sel_status = st.multiselect("Select Status", sorted(list(all_statuses)), default=default_status)
+
+                # 4. AGGREGATE DATA
+                summary_rows = []
+                for unit_name, u_df in all_units_data.items():
+                    if u_df.empty: continue
+                    temp_df = u_df.copy()
+                    
+                    # Create temporary formatting column for filtering
+                    if 'WEEK_NUM' in temp_df.columns:
+                         temp_df['WEEK_FMT'] = temp_df['WEEK_NUM'].apply(lambda x: f"WEEK {int(x)}" if pd.notnull(x) and x > 0 else "N/A")
+                    else:
+                         temp_df['WEEK_FMT'] = "N/A"
+
+                    # Apply Filters
+                    if summ_sel_month:
+                        temp_df = temp_df[temp_df['MONTH_STR'].isin(summ_sel_month)]
+                    if summ_sel_week:
+                        temp_df = temp_df[temp_df['WEEK_FMT'].isin(summ_sel_week)]
+                    if summ_sel_status and 'STATUS' in temp_df.columns:
+                        temp_df = temp_df[temp_df['STATUS'].astype(str).isin(summ_sel_status)]
+                    
+                    if not temp_df.empty:
+                        for c in ['ORD QTY','STD Cons','CAD Cons','CAN CUT %','CUT %','FABRIC LEFTOVER STOCK']:
+                            if c in temp_df.columns:
+                                temp_df[c] = pd.to_numeric(temp_df[c], errors='coerce').fillna(0)
+                        
+                        summary_rows.append({
+                            "UNIT NAME": unit_name,
+                            "ORD QTY": temp_df['ORD QTY'].sum(),
+                            "STD Cons": temp_df['STD Cons'].mean(),
+                            "CAD Cons": temp_df['CAD Cons'].mean(),
+                            "CAN CUT %": temp_df['CAN CUT %'].mean(),
+                            "CUT %": temp_df['CUT %'].mean(),
+                            "LEFTOVER STOCK": temp_df['FABRIC LEFTOVER STOCK'].sum()
+                        })
+
+                # 5. DISPLAY TABLE (Light Blue Style)
+                if summary_rows:
+                    summ_df = pd.DataFrame(summary_rows)
+                    
+                    styled_summ = summ_df.style.format({
+                        "ORD QTY": "{:,.0f}",
+                        "STD Cons": "{:.3f}",
+                        "CAD Cons": "{:.3f}",
+                        "CAN CUT %": "{:.2%}",
+                        "CUT %": "{:.2%}",
+                        "LEFTOVER STOCK": "{:,.2f}"
+                    }).set_properties(**{
+                        'background-color': '#e0f2fe',  # Light Blue
+                        'color': '#0c4a6e',             # Dark Blue Text
+                        'border-color': '#ffffff'
+                    })
+
+                    st.dataframe(styled_summ, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("⚠️ No data matches the selected filters.")
+
+            if st.button("❌ Close Summary", key="close_summ_btn"):
+                st.session_state.show_summary = False
+                st.rerun()
