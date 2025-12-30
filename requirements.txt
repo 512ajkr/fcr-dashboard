@@ -4,3 +4,4 @@ plotly
 requests
 openpyxl
 firebase-admin
+streamlit-autorefresh
