@@ -739,97 +739,94 @@ else:
             with st.spinner("Compiling data from all units..."):
                 all_units_data = {}
                 all_months = set()
-                all_weeks = set()
-                all_statuses = set()
                 
-                # 1. LOAD DATA & EXTRACT FILTERS
+                # 1. FIRST PASS: Load all data and identify available Months
                 for unit_name, config in UNIT_URLS.items():
                     u_url = config.get("dashboard_url", "") if isinstance(config, dict) else str(config)
-                    u_df = load_data(u_url) # Cached
+                    u_df = load_data(u_url)
                     
                     if not u_df.empty:
+                        # Ensure END DATE is datetime and create Week/Month strings from it
+                        u_df['END DATE'] = pd.to_datetime(u_df['END DATE'], errors='coerce')
+                        u_df['MONTH_STR'] = u_df['END DATE'].dt.strftime('%b-%y').str.upper()
+                        # Create Week string directly from END DATE (e.g., WK01, WK52)
+                        u_df['WEEK_FMT'] = u_df['END DATE'].dt.isocalendar().week.apply(lambda x: f"WK{int(x):02d}" if pd.notnull(x) else "N/A")
+                        
                         all_units_data[unit_name] = u_df
-                        
-                        # Collect Months
-                        months = u_df['MONTH_STR'].dropna().unique()
-                        all_months.update([m for m in months if m != "N/A"])
-                        
-                        # Collect Weeks (Format as "WEEK X")
-                        if 'WEEK_NUM' in u_df.columns:
-                            valid_w = u_df['WEEK_NUM'].dropna()
-                            formatted_weeks = [f"WEEK {int(w)}" for w in valid_w if w > 0]
-                            all_weeks.update(formatted_weeks)
+                        all_months.update(u_df['MONTH_STR'].dropna().unique())
 
-                        # Collect Status
-                        if 'STATUS' in u_df.columns:
-                            statuses = u_df['STATUS'].dropna().unique()
-                            all_statuses.update([str(s) for s in statuses])
-                
-                # 2. DEFAULT SELECTION LOGIC
-                curr_date = datetime.now()
-                
-                # Month Default
-                curr_month_str = curr_date.strftime('%b-%y').upper()
-                default_month = [curr_month_str] if curr_month_str in all_months else []
-                
-                # Week Default
-                curr_week_num = curr_date.isocalendar()[1]
-                curr_week_str = f"WEEK {curr_week_num}"
-                default_week = [curr_week_str] if curr_week_str in all_weeks else []
-
-                # Status Default
-                default_status = ["Completed"] if "Completed" in all_statuses else []
-
-                # 3. RENDER FILTERS (3 Columns)
+                # 2. RENDER MONTH FILTER FIRST
                 sf1, sf2, sf3 = st.columns(3)
+                
+                # --- NEW DEFAULT MONTH LOGIC ---
+                now = datetime.now()
+                # If today is the 1st week (Day 1 to 7), target the previous month
+                if now.day <= 7:
+                    # Move to the 1st of this month, then subtract 1 day to get the previous month
+                    target_date = now.replace(day=1) - timedelta(days=1)
+                else:
+                    # Otherwise, target the current month
+                    target_date = now
+                
+                # Format to match your data (e.g., "DEC-25")
+                default_month_str = target_date.strftime('%b-%y').upper()
+                # -------------------------------
+
                 with sf1:
-                    summ_sel_month = st.multiselect("Select Month(s)", sorted(list(all_months)), default=default_month)
+                    summ_sel_month = st.multiselect(
+                        "1. Select Month(s)", 
+                        sorted(list(all_months)), 
+                        default=[default_month_str] if default_month_str in all_months else []
+                    )
+
+                # 3. SECOND PASS: Identify weeks ONLY for the selected months
+                available_weeks = set()
+                for u_df in all_units_data.values():
+                    filtered_by_month = u_df[u_df['MONTH_STR'].isin(summ_sel_month)] if summ_sel_month else u_df
+                    available_weeks.update(filtered_by_month['WEEK_FMT'].unique())
+                
+                if "N/A" in available_weeks: available_weeks.remove("N/A")
+
+                # 4. RENDER WEEK & STATUS FILTERS (Now dependent on Month)
                 with sf2:
-                    sorted_weeks = sorted(list(all_weeks), key=lambda x: int(x.split(' ')[1]) if ' ' in x else 0)
-                    summ_sel_week = st.multiselect("Select Week(s)", sorted_weeks, default=default_week)
+                    sorted_weeks = sorted(list(available_weeks))
+                    summ_sel_week = st.multiselect("2. Select Week(s)", sorted_weeks, placeholder="All weeks in selected month")
+                
+                # Get statuses for the selected month/week
+                all_statuses = set()
+                for u_df in all_units_data.values():
+                    temp = u_df[u_df['MONTH_STR'].isin(summ_sel_month)] if summ_sel_month else u_df
+                    if summ_sel_week:
+                        temp = temp[temp['WEEK_FMT'].isin(summ_sel_week)]
+                    all_statuses.update(temp['STATUS'].dropna().unique())
+
                 with sf3:
-                    summ_sel_status = st.multiselect("Select Status", sorted(list(all_statuses)), default=default_status)
+                    summ_sel_status = st.multiselect("3. Select Status", sorted(list(all_statuses)), default=["Completed"] if "Completed" in all_statuses else [])
 
                 # 4. AGGREGATE DATA
+                # 5. FINAL AGGREGATION
                 summary_rows = []
                 for unit_name, u_df in all_units_data.items():
-                    if u_df.empty: continue
                     temp_df = u_df.copy()
                     
-                    # Create temporary formatting column for filtering
-                    if 'WEEK_NUM' in temp_df.columns:
-                         temp_df['WEEK_FMT'] = temp_df['WEEK_NUM'].apply(lambda x: f"WEEK {int(x)}" if pd.notnull(x) and x > 0 else "N/A")
-                    else:
-                         temp_df['WEEK_FMT'] = "N/A"
-
-                    # Apply Filters
+                    # Apply the dynamic filters
                     if summ_sel_month:
                         temp_df = temp_df[temp_df['MONTH_STR'].isin(summ_sel_month)]
                     if summ_sel_week:
                         temp_df = temp_df[temp_df['WEEK_FMT'].isin(summ_sel_week)]
-                    if summ_sel_status and 'STATUS' in temp_df.columns:
-                        temp_df = temp_df[temp_df['STATUS'].astype(str).isin(summ_sel_status)]
+                    if summ_sel_status:
+                        temp_df = temp_df[temp_df['STATUS'].isin(summ_sel_status)]
                     
-                    # --- Updated Summary Aggregation ---
                     if not temp_df.empty:
-                        for c in ['ORD QTY','STD Cons','CAD Cons','CAN CUT %','CUT %','FABRIC LEFTOVER STOCK','FAB Req','FABRIC USED','CUT QTY']:
-                            if c in temp_df.columns:
-                                temp_df[c] = pd.to_numeric(temp_df[c], errors='coerce').fillna(0)
-                        
-                        # Pre-calculate totals for formulas
+                        # (Keep your existing weighted calculation logic here)
                         s_ord = temp_df['ORD QTY'].sum()
                         s_req = temp_df['FAB Req'].sum()
-                        s_used = temp_df['FABRIC USED'].sum()
-                        s_cut = temp_df['CUT QTY'].sum()
                         
                         summary_rows.append({
                             "UNIT NAME": unit_name,
                             "ORD QTY": s_ord,
-                            # New Formula: Sum(FAB Req) / Sum(ORD QTY)
                             "STD Cons": (s_req / s_ord) if s_ord > 0 else 0,
-                            # New Formula: Sum(CAD Cons * ORD QTY) / Sum(ORD QTY)
                             "CAD Cons": ((temp_df['CAD Cons'] * temp_df['ORD QTY']).sum() / s_ord) if s_ord > 0 else 0,
-                            # For factory achieved in summary if you wish to add it, or keep existing %
                             "CAN CUT %": temp_df['CAN CUT %'].mean(), 
                             "CUT %": temp_df['CUT %'].mean(),
                             "LEFTOVER STOCK": temp_df['FABRIC LEFTOVER STOCK'].sum()
