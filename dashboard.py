@@ -468,12 +468,21 @@ else:
         sum_used = dff['FABRIC USED'].sum() if 'FABRIC USED' in dff.columns else 0
         sum_stock = dff['FABRIC LEFTOVER STOCK'].sum()
         
-        # Avoid Zero Division
+        # Weighted/Total Based Formulas
+        # 1. STD Cons: (Sum of FAB Req) / (Sum of ORD QTY)
+        avg_std = (sum_req / sum_ord) if sum_ord > 0 else 0
+
+        # 2. CAD Cons: Sum of (CAD Cons * ORD QTY) / Sum of ORD QTY
+        # We calculate row-wise multiplication first, then sum
+        cad_weighted_sum = (dff['CAD Cons'] * dff['ORD QTY']).sum()
+        avg_cad = (cad_weighted_sum / sum_ord) if sum_ord > 0 else 0
+
+        # 3. Factory Achieved Cons: (Sum of FABRIC USED) / (Sum of CUT QTY)
+        avg_ach = (sum_used / sum_cut) if sum_cut > 0 else 0
+
+        # (Keep these as they were or adjust if needed)
         avg_cancut_p = dff['CAN CUT %'].mean()*100 if not dff.empty else 0
         avg_cut_p = dff['CUT %'].mean()*100 if not dff.empty else 0
-        avg_std = dff['STD Cons'].mean() if not dff.empty else 0
-        avg_cad = dff['CAD Cons'].mean() if not dff.empty else 0
-        avg_ach = dff['ACHIEVED CONS'].mean() if not dff.empty else 0
 
         perf_cut = (sum_cut/sum_cancut*100) if sum_cancut>0 else 0
         perf_rcvd = (sum_rcvd/sum_req*100) if sum_req>0 else 0
@@ -801,17 +810,27 @@ else:
                     if summ_sel_status and 'STATUS' in temp_df.columns:
                         temp_df = temp_df[temp_df['STATUS'].astype(str).isin(summ_sel_status)]
                     
+                    # --- Updated Summary Aggregation ---
                     if not temp_df.empty:
-                        for c in ['ORD QTY','STD Cons','CAD Cons','CAN CUT %','CUT %','FABRIC LEFTOVER STOCK']:
+                        for c in ['ORD QTY','STD Cons','CAD Cons','CAN CUT %','CUT %','FABRIC LEFTOVER STOCK','FAB Req','FABRIC USED','CUT QTY']:
                             if c in temp_df.columns:
                                 temp_df[c] = pd.to_numeric(temp_df[c], errors='coerce').fillna(0)
                         
+                        # Pre-calculate totals for formulas
+                        s_ord = temp_df['ORD QTY'].sum()
+                        s_req = temp_df['FAB Req'].sum()
+                        s_used = temp_df['FABRIC USED'].sum()
+                        s_cut = temp_df['CUT QTY'].sum()
+                        
                         summary_rows.append({
                             "UNIT NAME": unit_name,
-                            "ORD QTY": temp_df['ORD QTY'].sum(),
-                            "STD Cons": temp_df['STD Cons'].mean(),
-                            "CAD Cons": temp_df['CAD Cons'].mean(),
-                            "CAN CUT %": temp_df['CAN CUT %'].mean(),
+                            "ORD QTY": s_ord,
+                            # New Formula: Sum(FAB Req) / Sum(ORD QTY)
+                            "STD Cons": (s_req / s_ord) if s_ord > 0 else 0,
+                            # New Formula: Sum(CAD Cons * ORD QTY) / Sum(ORD QTY)
+                            "CAD Cons": ((temp_df['CAD Cons'] * temp_df['ORD QTY']).sum() / s_ord) if s_ord > 0 else 0,
+                            # For factory achieved in summary if you wish to add it, or keep existing %
+                            "CAN CUT %": temp_df['CAN CUT %'].mean(), 
                             "CUT %": temp_df['CUT %'].mean(),
                             "LEFTOVER STOCK": temp_df['FABRIC LEFTOVER STOCK'].sum()
                         })
