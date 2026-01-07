@@ -489,8 +489,8 @@ else:
         perf_cons = avg_ach-avg_std
 
         ex1_count = len(dff[dff['CUT %'] < 1])
-        ex2_count = len(dff[dff['CAN CUT %'] < 1])
-        ex3_count = len(dff[dff['CUT %'] < dff['CAN CUT %']])
+        ex2_count = len(dff[dff['CAN CUT %'] < 1.01]) 
+        ex3_count = len(dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.03)]) # Updated
         
         def fmt(v): return str(v) if v>0 else "--"
 
@@ -586,7 +586,7 @@ else:
                 st.markdown('</div><div class="spacer-area"></div>', unsafe_allow_html=True)
 
             render_centered_card("bg-indigo", "CUT% < 100%", fmt(ex1_count), "btn_ex1", "ex1")
-            render_centered_card("bg-cyan", "CAN CUT% < 100%", fmt(ex2_count), "btn_ex2", "ex2")
+            render_centered_card("bg-cyan", "CAN CUT% < 101%", fmt(ex2_count), "btn_ex2", "ex2")
             render_centered_card("bg-green", "CUT% < CAN CUT%", fmt(ex3_count), "btn_ex3", "ex3")
             
             # --- SUMMARY BUTTON ---
@@ -669,12 +669,13 @@ else:
                 view_title = "🚨 Orders with CUT % < 100%"
                 view_color = "#6366f1"
             elif st.session_state.active_exception_view == 'ex2':
-                detail_df = dff[dff['CAN CUT %'] < 1].copy()
-                view_title = "⚠️ Orders with CAN CUT % < 100%"
+                detail_df = dff[dff['CAN CUT %'] < 1.01].copy() 
+                view_title = "⚠️ Orders with CAN CUT % < 101%"
                 view_color = "#06b6d4"
             elif st.session_state.active_exception_view == 'ex3':
-                detail_df = dff[dff['CUT %'] < dff['CAN CUT %']].copy()
-                view_title = "📉 Orders where CUT % < CAN CUT %"
+                # Updated filter to exclude anything where CUT % is 103% or higher
+                detail_df = dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.03)].copy()
+                view_title = "📉 Orders where CUT % < CAN CUT % (Excl. >103%)"
                 view_color = "#10b981"
 
             if not detail_df.empty:
