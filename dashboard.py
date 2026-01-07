@@ -489,8 +489,8 @@ else:
         perf_cons = avg_ach-avg_std
 
         ex1_count = len(dff[dff['CUT %'] < 1])
-        ex2_count = len(dff[dff['CAN CUT %'] < 1.01]) 
-        ex3_count = len(dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.03)]) # Updated
+        ex2_count = len(dff[(dff['CAN CUT %'] < 1.01) & (dff['CUT %'] < 1.01)]) # Updated
+        ex3_count = len(dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.01)]) # Updated
         
         def fmt(v): return str(v) if v>0 else "--"
 
@@ -669,13 +669,14 @@ else:
                 view_title = "🚨 Orders with CUT % < 100%"
                 view_color = "#6366f1"
             elif st.session_state.active_exception_view == 'ex2':
-                detail_df = dff[dff['CAN CUT %'] < 1.01].copy() 
-                view_title = "⚠️ Orders with CAN CUT % < 101%"
+                # This filter now ensures you only see rows where both percentages are under 101%
+                detail_df = dff[(dff['CAN CUT %'] < 1.01) & (dff['CUT %'] < 1.01)].copy() 
+                view_title = "⚠️ Orders with CAN CUT % < 101% (Excl. Cut >101%)"
                 view_color = "#06b6d4"
             elif st.session_state.active_exception_view == 'ex3':
-                # Updated filter to exclude anything where CUT % is 103% or higher
-                detail_df = dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.03)].copy()
-                view_title = "📉 Orders where CUT % < CAN CUT % (Excl. >103%)"
+                # Updated filter to exclude anything where CUT % is 101% or higher
+                detail_df = dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.01)].copy()
+                view_title = "📉 Orders where CUT % < CAN CUT % (Excl. >101%)"
                 view_color = "#10b981"
 
             if not detail_df.empty:
