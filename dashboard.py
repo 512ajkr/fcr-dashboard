@@ -308,6 +308,17 @@ def toggle_login():
 # 1. Load Configuration
 UNIT_URLS = load_config()
 
+if 'selected_months_memory' not in st.session_state:
+    # This runs ONLY on the first page load or full browser refresh
+    now = datetime.now()
+    if now.day <= 10:
+        target_date = now.replace(day=1) - timedelta(days=1)
+    else:
+        target_date = now
+    
+    # Store the default month based on your original logic
+    st.session_state['selected_months_memory'] = [target_date.strftime('%b-%y').upper()]
+
 # 2. Layout Structure
 if st.session_state.admin_logged_in:
     # ------------------ ADMIN PANEL VIEW ------------------
@@ -418,15 +429,36 @@ else:
             f1,f2,f3,f4,f5 = st.columns([1,1,1,1,0.6])
             
             with f1:
+                # 1. Get available months from the current data
                 month_options = sorted([str(m) for m in df['MONTH_STR'].unique() if str(m) != 'nan' and m != "N/A"])
-                if now_dt.day <= 10:
-                    target_date = now_dt.replace(day=1) - timedelta(days=1)
-                else:
-                    target_date = now_dt
-                default_month_val = target_date.strftime('%b-%y').upper()
-                m_default = [default_month_val] if default_month_val in month_options else []
-                sel_month = st.multiselect("📅 Month", month_options, default=m_default, placeholder="All Months")
+                
+                # 2. Set INITIAL logic only if nothing has been selected yet
+                if 'month_memory' not in st.session_state:
+                    if now_dt.day <= 10:
+                        target_date = now_dt.replace(day=1) - timedelta(days=1)
+                    else:
+                        target_date = now_dt
+                    initial_val = target_date.strftime('%b-%y').upper()
+                    # Initialize the state with your default date logic
+                    st.session_state.month_memory = [initial_val] if initial_val in month_options else []
+
+                # 3. CRITICAL: Filter out months in memory that don't exist in this specific Unit's data
+                # This prevents the "Default value contains items that are not in options" error
+                valid_selections = [m for m in st.session_state.month_memory if m in month_options]
+
+                # 4. The Multiselect Widget using 'key' for automatic sync
+                sel_month = st.multiselect(
+                    "📅 Month", 
+                    options=month_options, 
+                    default=valid_selections, 
+                    placeholder="All Months",
+                    key="month_selector" # Use a key for the widget
+                )
+                
+                # 5. Update the memory for the NEXT rerun/unit switch
+                st.session_state.month_memory = sel_month
             
+            # Apply filter
             dff = df[df['MONTH_STR'].isin(sel_month)] if sel_month else df
 
             with f2:
