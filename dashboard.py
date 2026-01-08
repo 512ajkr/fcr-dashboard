@@ -429,37 +429,44 @@ else:
             f1,f2,f3,f4,f5 = st.columns([1,1,1,1,0.6])
             
             with f1:
-                # 1. Get available months from the current data
-                month_options = sorted([str(m) for m in df['MONTH_STR'].unique() if str(m) != 'nan' and m != "N/A"])
+                # 1. Get unique months from data
+                raw_months = [str(m) for m in df['MONTH_STR'].unique() if str(m) != 'nan' and m != "N/A"]
                 
-                # 2. Set INITIAL logic only if nothing has been selected yet
+                # 2. Sort months in DESCENDING chronological order
+                # We convert "JAN-26" to a date object to sort correctly, then back to the string
+                month_options = sorted(
+                    raw_months, 
+                    key=lambda x: datetime.strptime(x, '%b-%y'), 
+                    reverse=True
+                )
+                
+                # 3. Set INITIAL logic only if nothing has been selected yet
                 if 'month_memory' not in st.session_state:
                     if now_dt.day <= 10:
                         target_date = now_dt.replace(day=1) - timedelta(days=1)
                     else:
                         target_date = now_dt
                     initial_val = target_date.strftime('%b-%y').upper()
-                    # Initialize the state with your default date logic
                     st.session_state.month_memory = [initial_val] if initial_val in month_options else []
 
-                # 3. CRITICAL: Filter out months in memory that don't exist in this specific Unit's data
-                # This prevents the "Default value contains items that are not in options" error
+                # 4. Filter memory to ensure only months existing in the current Unit are used
                 valid_selections = [m for m in st.session_state.month_memory if m in month_options]
 
-                # 4. The Multiselect Widget using 'key' for automatic sync
+                # 5. The Multiselect Widget with the sorted descending options
                 sel_month = st.multiselect(
                     "📅 Month", 
                     options=month_options, 
                     default=valid_selections, 
                     placeholder="All Months",
-                    key="month_selector" # Use a key for the widget
+                    key="month_selector"
                 )
                 
-                # 5. Update the memory for the NEXT rerun/unit switch
+                # Update memory
                 st.session_state.month_memory = sel_month
             
-            # Apply filter
             dff = df[df['MONTH_STR'].isin(sel_month)] if sel_month else df
+            
+        
 
             with f2:
                 buyer_options = sorted([str(b) for b in dff['BUYER'].unique() if str(b) != 'nan'])
@@ -628,54 +635,68 @@ else:
 
         with c2:
             if 'BUYER' in dff.columns and not dff.empty:
-                dfc = dff.groupby('BUYER')[['CAN CUT %', 'CUT %']].mean().reset_index()
+                # 1. Faster Aggregation
+                dfc = dff.groupby('BUYER').agg({
+                    'CAN CUT %': 'mean',
+                    'CUT %': 'mean'
+                }).reset_index()
+                
                 dfc['CAN CUT %'] *= 100
                 dfc['CUT %'] *= 100
                 dfc = dfc.sort_values(by='CAN CUT %', ascending=False)
 
                 fig = go.Figure()
                 
-                # --- GRAPH: BARS FIRST, THEN TREND LINE ---
-                # 1. Dark Blue Bar (Can Cut)
+                # 2. Optimized Bar Traces
                 fig.add_trace(go.Bar(
                     x=dfc['BUYER'], y=dfc['CAN CUT %'], name="Can Cut %", 
-                    marker=dict(color="#2c6e9e", line=dict(width=0)), # Darker Blue match
+                    marker=dict(color="#2c6e9e"),
                     text=[f"{v:.1f}%" for v in dfc['CAN CUT %']], textposition="auto",
-                    textfont=dict(color="white", size=13),
-                    hovertemplate="<b>%{x}</b><br>Can Cut: %{y:.2f}%<extra></extra>",
                     marker_cornerradius=10
                 ))
                 
-                # 2. Light Blue Bar (Cut)
                 fig.add_trace(go.Bar(
                     x=dfc['BUYER'], y=dfc['CUT %'], name="Cut %", 
-                    marker=dict(color="#5fa6e1", line=dict(width=0)), # Lighter Blue match
+                    marker=dict(color="#5fa6e1"),
                     text=[f"{v:.1f}%" for v in dfc['CUT %']], textposition="auto",
-                    textfont=dict(color="white", size=13),
-                    hovertemplate="<b>%{x}</b><br>Cut: %{y:.2f}%<extra></extra>",
                     marker_cornerradius=10
                 ))
 
-                # 3. Red Trend Line (On Top)
                 fig.add_trace(go.Scatter(
-                    x=dfc['BUYER'], y=dfc['CUT %'], mode='lines+markers', name='Cut % Trend',
-                    line=dict(color="#e11d48", width=3), # Red
-                    marker=dict(size=10, color="#e11d48", line=dict(width=2, color='white')),
-                    showlegend=False, hoverinfo='skip'
+                    x=dfc['BUYER'], y=dfc['CUT %'], mode='lines+markers', name='Trend',
+                    line=dict(color="#e11d48", width=3),
+                    marker=dict(size=8, color="#e11d48"),
+                    showlegend=False
                 ))
 
                 fig.update_layout(
-                    title=dict(text="📈 Performance by Buyer (Can Cut vs Cut)", x=0.01, font=dict(size=26, color="#1e293b", family="Arial", weight=700)),
-                    hovermode="x unified", barmode='group', 
-                    plot_bgcolor='rgba(255, 255, 255, 1)', # White background inside plot
-                    paper_bgcolor='rgba(0,0,0,0)', # Transparent paper to show the container border
-                    height=400, bargap=0.2,
-                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=0.98),
-                    yaxis=dict(showline=False, zeroline=False),
-                    xaxis=dict(showgrid=False, showline=True, linecolor="#cbd5e1"),
-                    margin=dict(l=40, r=50, t=60, b=70)
+                    title=dict(
+                        text="📈 Performance by Buyer", 
+                        font=dict(size=22, color="#1e293b", weight=700),
+                        x=0.01 # Aligns title to the left
+                    ),
+                    hovermode="x unified", 
+                    barmode='group', 
+                    height=400,
+                    # --- INCREASED MARGINS ---
+                    # Increasing 'r' (right) from 10 to 40 prevents clipping
+                    margin=dict(l=20, r=40, t=60, b=20), 
+                    showlegend=True,
+                    # --- ADJUSTED LEGEND ---
+                    # Setting x to 0.98 instead of 1.0 pulls it away from the edge
+                    legend=dict(
+                        orientation="h", 
+                        yanchor="bottom", 
+                        y=1.02, 
+                        xanchor="right", 
+                        x=0.98 
+                    ),
+                    yaxis=dict(showgrid=True, gridcolor='#f1f5f9'),
+                    xaxis=dict(showgrid=False)
                 )
-                st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'displaylogo': False})
+
+                # 3. Use 'use_container_width=True' and turn off 'displaylogo'
+                st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False, 'staticPlot': False})
             else:
                 st.info("No data available for the selected filters.")
 
