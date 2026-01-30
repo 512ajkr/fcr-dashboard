@@ -394,7 +394,7 @@ else:
     if 'active_exception_view' not in st.session_state:
         st.session_state.active_exception_view = None
 
-    now_dt = datetime.now()
+    now_dt = datetime.utcnow() + timedelta(hours=5, minutes=30)
     now_str = now_dt.strftime("%d-%b-%Y %I:%M %p")
 
     # ================= HEADER LAYOUT =================
