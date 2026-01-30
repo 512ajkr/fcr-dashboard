@@ -14,13 +14,7 @@ from firebase_admin import credentials, firestore
 
 # --- AUTO-INSTALLER BLOCK ---
 # This forces installation into the CURRENT Python environment
-try:
-    from streamlit_autorefresh import st_autorefresh
-except ImportError:
-    # If the import fails, install it immediately using the current python executable
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit-autorefresh"])
-    from streamlit_autorefresh import st_autorefresh
-# ---------------------------
+from streamlit_autorefresh import st_autorefresh
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
@@ -110,6 +104,9 @@ if 'show_login' not in st.session_state:
 
 if 'show_summary' not in st.session_state:
     st.session_state.show_summary = False
+
+if "show_cad_exception" not in st.session_state:
+    st.session_state.show_cad_exception = False
 
 # ================= CUSTOM CSS =================
 st.markdown("""
@@ -261,14 +258,24 @@ div.stButton > button {
     max-width: 500px;
     margin: auto;
 }
+            .clickable-cons {
+                text-decoration: underline dotted #dc2626;
+                cursor: pointer;
+            }
+            .clickable-cons:hover {
+                color: #b91c1c !important;
+            }
+
+
 </style>
 """, unsafe_allow_html=True)
 
 # ================= DATA LOADER =================
 @st.cache_data(ttl=300)
 def load_data(url):
+    if not url: return pd.DataFrame() # Handle empty URL
     try:
-        r = requests.get(url)
+        r = requests.get(url, timeout=10) # Add timeout
         r.raise_for_status()
         df = pd.read_excel(BytesIO(r.content), engine="openpyxl")
         
@@ -286,6 +293,8 @@ def load_data(url):
             df['MONTH_STR'] = "N/A"
         return df
     except Exception as e:
+        # Show error strictly to admin or in logs, don't break UI silently
+        print(f"Error loading data: {e}") 
         return pd.DataFrame()
 
 # ================= ADMIN LOGIC FUNCTIONS =================
@@ -432,11 +441,18 @@ else:
                 # 1. Get unique months from data
                 raw_months = [str(m) for m in df['MONTH_STR'].unique() if str(m) != 'nan' and m != "N/A"]
                 
-                # 2. Sort months in DESCENDING chronological order
-                # We convert "JAN-26" to a date object to sort correctly, then back to the string
+                # --- HELPER & UPDATED SORTING ---
+                # Define the helper function right here (or at the top of your script)
+                def safe_parse_date(date_str):
+                    try:
+                        return datetime.strptime(date_str, '%b-%y')
+                    except (ValueError, TypeError):
+                        return datetime.min # Puts bad dates/typos at the end
+
+                # 2. Sort months using the safe function
                 month_options = sorted(
                     raw_months, 
-                    key=lambda x: datetime.strptime(x, '%b-%y'), 
+                    key=safe_parse_date, 
                     reverse=True
                 )
                 
@@ -520,8 +536,9 @@ else:
         avg_ach = (sum_used / sum_cut) if sum_cut > 0 else 0
 
         # (Keep these as they were or adjust if needed)
-        avg_cancut_p = dff['CAN CUT %'].mean()*100 if not dff.empty else 0
-        avg_cut_p = dff['CUT %'].mean()*100 if not dff.empty else 0
+        avg_cancut_p = (sum_cancut / sum_ord * 100) if sum_ord > 0 else 0
+        avg_cut_p = (sum_cut / sum_ord * 100) if sum_ord > 0 else 0
+
 
         perf_cut = (sum_cut/sum_cancut*100) if sum_cancut>0 else 0
         perf_rcvd = (sum_rcvd/sum_req*100) if sum_req>0 else 0
@@ -566,21 +583,33 @@ else:
 
         # Helper to Render Group Card
         def render_group_card(title, metrics, alert_trigger=False):
-            # metrics is list of tuples: (label, value_str, color_hex, tooltip_text)
             rows_html = ""
-            for lbl, val, col, tooltip in metrics:
-                # Added 'title' attribute for hover tooltip
-                rows_html += f'<div class="metric-row" title="{tooltip}"><span class="m-label">{lbl}</span><span class="m-value" style="color: {col};">{val}</span></div>'
+            for lbl, val, col, tooltip, click_id in metrics:
+                extra_class = "clickable-cons" if click_id else ""
+                onclick_js = f"window.dispatchEvent(new Event('{click_id}'))" if click_id else ""
+                
+                rows_html += f'''
+                <div class="metric-row" title="{tooltip}">
+                    <span class="m-label">{lbl}</span>
+                    <span class="m-value {extra_class}" style="color: {col};" onclick="{onclick_js}">
+                        {val}
+                    </span>
+                </div>
+                '''
             
-            # If alert_trigger is True, add the 'alert-card' class
             card_class = "group-card alert-card" if alert_trigger else "group-card"
-            
-            st.markdown(f"""
-            <div class="{card_class}">
-                <div class="group-header">{title}</div>
-                {rows_html}
-            </div>
-            """, unsafe_allow_html=True)
+
+            st.markdown(
+                f"""
+                <div class="{card_class}">
+                    <div class="group-header">{title}</div>
+                    {rows_html}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+
 
         st.markdown("<div style='height:15px'></div>", unsafe_allow_html=True)
 
@@ -589,30 +618,53 @@ else:
 
         with c_qty:
             render_group_card("Quantity", [
-                ("Can Cut Performance", f"{perf_cut:,.2f}%", cp_color, "Formula: (Total Cut Qty / Total Can Cut Qty) * 100"),
-                ("Order Qty", f"{sum_ord:,.0f}", ord_color, "Total Order Quantity of selected filters"),
-                ("Can Cut Qty", f"{sum_cancut:,.0f} ({avg_cancut_p:.2f}%)", cc_color, "Total Quantity feasible to cut based on Fabric Availability"),
-                ("Cut Qty", f"{sum_cut:,.0f} ({avg_cut_p:.2f}%)", cut_color, "Total Actual Cut Quantity produced")
+                ("Can Cut Performance", f"{perf_cut:,.2f}%", cp_color, "Formula: (Total Cut Qty / Total Can Cut Qty) * 100", None),
+                ("Order Qty", f"{sum_ord:,.0f}", ord_color, "Total Order Quantity of selected filters", None),
+                ("Can Cut Qty", f"{sum_cancut:,.0f} ({avg_cancut_p:.2f}%)", cc_color, "Total Quantity feasible to cut based on Fabric Availability", None),
+                ("Cut Qty", f"{sum_cut:,.0f} ({avg_cut_p:.2f}%)", cut_color, "Total Actual Cut Quantity produced", None)
             ], alert_trigger=alert_qty)
+            
+
 
         with c_fab:
             render_group_card("Fabric", [
-                ("Fabric Required", f"{sum_req:,.2f}", req_color, "Total Fabric Required for orders"),
-                ("Fabric Received", f"{sum_rcvd:,.2f} ({perf_rcvd:.2f}%)", rcvd_color, "Total Fabric Received from store (Percentage of Required)"),
-                ("Fabric Used", f"{sum_used:,.2f}", used_color, "Total Fabric consumed in cutting"),
-                ("Fabric Leftover", f"{sum_stock:,.2f}", stock_color, "Fabric Remaining Stock (Received - Used)")
+                ("Fabric Required", f"{sum_req:,.2f}", req_color, "Total Fabric Required for orders", None),
+                ("Fabric Received", f"{sum_rcvd:,.2f} ({perf_rcvd:.2f}%)", rcvd_color, "Total Fabric Received from store (Percentage of Required)", None),
+                ("Fabric Used", f"{sum_used:,.2f}", used_color, "Total Fabric consumed in cutting", None),
+                ("Fabric Leftover", f"{sum_stock:,.2f}", stock_color, "Fabric Remaining Stock (Received - Used)", None)
             ], alert_trigger=alert_fab)
+
 
         with c_cons:
             sym = "+" if perf_cons > 0 else ""
+
+            # 1. REMOVED "cad_click" from the tuple below (changed to None)
             render_group_card("Consumption", [
-                ("STD Cons", f"{avg_std:.3f}", std_color, "Average Standard Consumption (Budgeted)"),
-                ("CAD Cons", f"{avg_cad:.3f}", cad_color, "Average CAD Consumption (Marker Plan)"),
-                ("Factory Achieved Cons", f"{avg_ach:.3f}", ach_color, "Average Actual Consumption on Floor"),
-                ("Cons Performance", f"{sym}{perf_cons:.3f}", cons_color, "Difference: Achieved Cons - STD Cons (Positive means excess usage)")
+                ("STD Cons", f"{avg_std:.3f}", std_color, "Average Standard Consumption", None),
+                ("CAD Cons", f"{avg_cad:.3f}", cad_color, "CAD higher than STD = Loss", None), 
+                ("Factory Achieved Cons", f"{avg_ach:.3f}", ach_color, "Actual Factory Consumption", None),
+                ("Cons Performance", f"{sym}{perf_cons:.3f}", cons_color, "Achieved - STD", None)
             ], alert_trigger=alert_cons)
 
+            # 2. ADDED Native Button Logic
+            # If CAD Cons is red (meaning CAD > STD), show a button to drill down
+            if cad_color == txt_red:
+                st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
+                if st.button("🚨 View CAD Exceptions", key="btn_cad_ex", use_container_width=True):
+                    st.session_state.show_cad_exception = True
+                    st.rerun()
+
         st.markdown("<div style='height:25px'></div>", unsafe_allow_html=True)
+
+        components.html("""
+        <script>
+        window.addEventListener("cad_click", function() {
+            window.parent.postMessage({type: "CAD_CLICK"}, "*");
+        });
+        </script>
+        """, height=0)
+
+        
 
         # Exception & Chart
         c1, c2 = st.columns([1, 2])
@@ -760,7 +812,7 @@ else:
                     'CAN CUT %': '{:.2%}',
                     'CUT %': '{:.2%}'
                 })\
-                .map(color_red_if_low, subset=['CAN CUT %', 'CUT %'])\
+                .applymap(color_red_if_low, subset=['CAN CUT %', 'CUT %'])\
                 .set_properties(**{'background-color': '#f8fafc', 'color': '#000080', 'border-color': '#cbd5e1'})
 
                 st.dataframe(
@@ -773,7 +825,47 @@ else:
                 )
             else:
                 st.success("✅ No exceptions found!")
+            
+        # ----------------------------------------------------------------
+        # 🚨 CAD CONS EXCEPTION TABLE (Only when clicked)
+        # ----------------------------------------------------------------
+        if st.session_state.show_cad_exception:
+            st.markdown("---")
+            st.markdown("## 🚨 CAD Cons Higher Than STD Cons")
 
+            cad_ex_df = pd.DataFrame()
+
+            if not dff.empty and "CAD Cons" in dff.columns and "STD Cons" in dff.columns:
+                cad_ex_df = dff[dff['CAD Cons'] > dff['STD Cons']].copy()
+
+            if not cad_ex_df.empty:
+                cad_ex_df.reset_index(drop=True, inplace=True)
+                cad_ex_df.insert(0, "SL. NO.", range(1, len(cad_ex_df) + 1))
+
+                display_cols = [
+                    "SL. NO.", "BUYER", "STYLE NO", "COLOUR", "PO NUMBER",
+                    "ORD QTY", "STD Cons", "CAD Cons", "FABRIC WIDTH", "ACHIEVED CONS"
+                ]
+                final_cols = [c for c in display_cols if c in cad_ex_df.columns]
+
+                styled = cad_ex_df[final_cols].style.format({
+                    "ORD QTY": "{:,.0f}",
+                    "STD Cons": "{:.3f}",
+                    "CAD Cons": "{:.3f}",
+                    "ACHIEVED CONS": "{:.3f}"
+                })
+
+                st.dataframe(styled, use_container_width=True, height=420)
+            else:
+                st.success("✅ No CAD Cons issues found")
+
+            if st.button("❌ Close CAD Summary"):
+                st.session_state.show_cad_exception = False
+                st.rerun()
+
+
+
+        
         # ----------------------------------------------------------------
         # 🔥 GLOBAL SUMMARY TABLE (WITH STATUS FILTER)
         # ----------------------------------------------------------------
@@ -874,16 +966,25 @@ else:
                     
                     if not temp_df.empty:
                         # (Keep your existing weighted calculation logic here)
+                        # --- FIXED WEIGHTED CALCULATIONS ---
+                        # 1. Calculate Totals
                         s_ord = temp_df['ORD QTY'].sum()
                         s_req = temp_df['FAB Req'].sum()
-                        
+                        sum_cut_qty = temp_df['CUT QTY'].sum()
+                        sum_cancut_qty = temp_df['CAN CUT QTY'].sum()
+
+                        # 2. Calculate Weighted Percentages (Avoid Division by Zero)
+                        # Instead of averaging the percentages, we divide Total Cut / Total Order
+                        weighted_cut_perc = (sum_cut_qty / s_ord) if s_ord > 0 else 0
+                        weighted_cancut_perc = (sum_cancut_qty / s_ord) if s_ord > 0 else 0
+
                         summary_rows.append({
                             "UNIT NAME": unit_name,
                             "ORD QTY": s_ord,
                             "STD Cons": (s_req / s_ord) if s_ord > 0 else 0,
                             "CAD Cons": ((temp_df['CAD Cons'] * temp_df['ORD QTY']).sum() / s_ord) if s_ord > 0 else 0,
-                            "CAN CUT %": temp_df['CAN CUT %'].mean(), 
-                            "CUT %": temp_df['CUT %'].mean(),
+                            "CAN CUT %": weighted_cancut_perc,  # Corrected Math
+                            "CUT %": weighted_cut_perc,         # Corrected Math
                             "LEFTOVER STOCK": temp_df['FABRIC LEFTOVER STOCK'].sum()
                         })
 
