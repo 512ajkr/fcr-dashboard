@@ -258,20 +258,27 @@ div.stButton > button {
     max-width: 500px;
     margin: auto;
 }
-            .clickable-cons {
-                text-decoration: underline dotted #dc2626;
-                cursor: pointer;
-            }
-            .clickable-cons:hover {
-                color: #b91c1c !important;
-            }
+
+.clickable-cons {
+    text-decoration: underline dotted #dc2626 !important;
+    text-underline-offset: 4px;
+    cursor: help; /* Changes cursor to question mark/pointer */
+    font-weight: 900 !important;
+}
+            
+/* Make the Refresh Button (in Column 5) Pulse when clicked */
+div[data-testid="column"]:nth-of-type(5) div[data-testid="stButton"] button:active {
+    transform: scale(0.95);
+    transition: transform 0.1s;
+    background-color: #0ea5e9 !important; /* Lighter blue on click */
+}
 
 
 </style>
 """, unsafe_allow_html=True)
 
 # ================= DATA LOADER =================
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=300, show_spinner=False)
 def load_data(url):
     if not url: return pd.DataFrame() # Handle empty URL
     try:
@@ -413,10 +420,32 @@ else:
 
     # 3. EXECUTE HEADER TITLE LAST
     with c_header:
+        # 1. Fetch the Reference Excel Link
+        current_config = UNIT_URLS.get(selected_unit, {})
+        # specific check to ensure we get a string URL
+        ref_link = current_config.get("excel_url", "") if isinstance(current_config, dict) else ""
+        
+        # 2. Build the Title HTML with Dotted Underline
+        if ref_link:
+            title_html = f"""
+            <a href="{ref_link}" target="_blank" 
+               style="text-decoration: underline dotted white; 
+                      text-underline-offset: 6px; 
+                      color: white; 
+                      cursor: pointer;" 
+               title="Open Original Reference Excel for {selected_unit}">
+               FCR KNITS - {selected_unit}
+            </a>
+            """
+        else:
+            # Non-clickable if no link exists
+            title_html = f"FCR KNITS - {selected_unit}"
+
+        # 3. Render the Ribbon
         st.markdown(f"""
         <div class="top-ribbon">
             <div class="ribbon-header">
-                <div class="ribbon-title">FCR KNITS - {selected_unit}</div>
+                <div class="ribbon-title">{title_html}</div>
                 <div class="ribbon-time">Last Refreshed: {now_str}</div>
             </div>
         </div>
@@ -506,10 +535,12 @@ else:
             with f5:
                 st.markdown("<div style='height:35px'></div>", unsafe_allow_html=True)
                 
-                # Button 1: Refresh
+                # Button 1: Refresh with Spinner Effect
                 if st.button("🔄 Refresh", use_container_width=True):
-                    st.cache_data.clear()
-                    st.session_state.active_exception_view = None
+                    # This shows a spinning loader while the code executes
+                    with st.spinner("Refreshing Dashboard..."):
+                        st.cache_data.clear()
+                        st.session_state.active_exception_view = None
                     st.rerun()
 
                 
@@ -620,15 +651,15 @@ else:
             render_group_card("Quantity", [
                 ("Can Cut Performance", f"{perf_cut:,.2f}%", cp_color, "Formula: (Total Cut Qty / Total Can Cut Qty) * 100", None),
                 ("Order Qty", f"{sum_ord:,.0f}", ord_color, "Total Order Quantity of selected filters", None),
-                ("Can Cut Qty", f"{sum_cancut:,.0f} ({avg_cancut_p:.2f}%)", cc_color, "Total Quantity feasible to cut based on Fabric Availability", None),
-                ("Cut Qty", f"{sum_cut:,.0f} ({avg_cut_p:.2f}%)", cut_color, "Total Actual Cut Quantity produced", None)
+                ("Can Cut Qty", f"{sum_cancut:,.0f} ({avg_cancut_p:.2f}%)", cc_color, "Formula: Can Cut Qty Total/Order Qty Total", None),
+                ("Cut Qty", f"{sum_cut:,.0f} ({avg_cut_p:.2f}%)", cut_color, "Formula: Cut Qty Total/Order Qty Total", None)
             ], alert_trigger=alert_qty)
             
 
 
         with c_fab:
             render_group_card("Fabric", [
-                ("Fabric Required", f"{sum_req:,.2f}", req_color, "Total Fabric Required for orders", None),
+                ("Fabric Required", f"{sum_req:,.2f}", req_color, "Total of (Order Qty * STD CONS)", None),
                 ("Fabric Received", f"{sum_rcvd:,.2f} ({perf_rcvd:.2f}%)", rcvd_color, "Total Fabric Received from store (Percentage of Required)", None),
                 ("Fabric Used", f"{sum_used:,.2f}", used_color, "Total Fabric consumed in cutting", None),
                 ("Fabric Leftover", f"{sum_stock:,.2f}", stock_color, "Fabric Remaining Stock (Received - Used)", None)
@@ -636,23 +667,20 @@ else:
 
 
         with c_cons:
+            # 1. Logic Checks
+            is_cad_alert = avg_cad > avg_std
+            cad_color = txt_red if is_cad_alert else txt_green
+            
+            # 2. Render Card
             sym = "+" if perf_cons > 0 else ""
-
-            # 1. REMOVED "cad_click" from the tuple below (changed to None)
+            
+            # We removed the stealth button code from here
             render_group_card("Consumption", [
                 ("STD Cons", f"{avg_std:.3f}", std_color, "Average Standard Consumption", None),
                 ("CAD Cons", f"{avg_cad:.3f}", cad_color, "CAD higher than STD = Loss", None), 
                 ("Factory Achieved Cons", f"{avg_ach:.3f}", ach_color, "Actual Factory Consumption", None),
                 ("Cons Performance", f"{sym}{perf_cons:.3f}", cons_color, "Achieved - STD", None)
             ], alert_trigger=alert_cons)
-
-            # 2. ADDED Native Button Logic
-            # If CAD Cons is red (meaning CAD > STD), show a button to drill down
-            if cad_color == txt_red:
-                st.markdown("<div style='height: 5px;'></div>", unsafe_allow_html=True)
-                if st.button("🚨 View CAD Exceptions", key="btn_cad_ex", use_container_width=True):
-                    st.session_state.show_cad_exception = True
-                    st.rerun()
 
         st.markdown("<div style='height:25px'></div>", unsafe_allow_html=True)
 
@@ -684,6 +712,15 @@ else:
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             if st.button("📋 View All Units Summary", use_container_width=True):
                 st.session_state.show_summary = True
+            
+            # --- 🔥 MOVED CAD BUTTON HERE ---
+            # Only show if CAD Consumption is higher than Standard (Alert State)
+            if avg_cad > avg_std:
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                # type="primary" makes it stand out (usually red/highlighted)
+                if st.button("🚨 View CAD Exceptions", use_container_width=True, type="primary"):
+                    st.session_state.show_cad_exception = True
+                    st.rerun()
 
         with c2:
             if 'BUYER' in dff.columns and not dff.empty:
@@ -725,17 +762,18 @@ else:
                     title=dict(
                         text="📈 Performance by Buyer", 
                         font=dict(size=22, color="#1e293b", weight=700),
-                        x=0.01 # Aligns title to the left
+                        x=0.01 
                     ),
                     hovermode="x unified", 
                     barmode='group', 
                     height=400,
-                    # --- INCREASED MARGINS ---
-                    # Increasing 'r' (right) from 10 to 40 prevents clipping
-                    margin=dict(l=20, r=40, t=60, b=20), 
+                    
+                    # --- 🔥 UPDATED MARGINS HERE 🔥 ---
+                    # Changed 'b' (bottom) from 20 to 60 to give space for Buyer Names
+                    margin=dict(l=20, r=40, t=60, b=60), 
+                    # ----------------------------------
+
                     showlegend=True,
-                    # --- ADJUSTED LEGEND ---
-                    # Setting x to 0.98 instead of 1.0 pulls it away from the edge
                     legend=dict(
                         orientation="h", 
                         yanchor="bottom", 
@@ -827,11 +865,18 @@ else:
                 st.success("✅ No exceptions found!")
             
         # ----------------------------------------------------------------
-        # 🚨 CAD CONS EXCEPTION TABLE (Only when clicked)
+        # 🚨 CAD CONS EXCEPTION TABLE (Triggered by Button)
         # ----------------------------------------------------------------
         if st.session_state.show_cad_exception:
             st.markdown("---")
-            st.markdown("## 🚨 CAD Cons Higher Than STD Cons")
+            st.markdown('<div id="cad_target"></div>', unsafe_allow_html=True)
+            
+            components.html(
+                """<script>window.parent.document.getElementById("cad_target").scrollIntoView({behavior: "smooth", block: "start"});</script>""",
+                height=0
+            )
+
+            st.subheader("🚨 CAD Consumption Exceptions (CAD > STD)")
 
             cad_ex_df = pd.DataFrame()
 
@@ -842,30 +887,40 @@ else:
                 cad_ex_df.reset_index(drop=True, inplace=True)
                 cad_ex_df.insert(0, "SL. NO.", range(1, len(cad_ex_df) + 1))
 
-                display_cols = [
-                    "SL. NO.", "BUYER", "STYLE NO", "COLOUR", "PO NUMBER",
+                req_cols = [
+                    "SL. NO.", "BUYER", "STYLE NO", "COLOUR", "PO NUMBER", 
                     "ORD QTY", "STD Cons", "CAD Cons", "FABRIC WIDTH", "ACHIEVED CONS"
                 ]
-                final_cols = [c for c in display_cols if c in cad_ex_df.columns]
+                final_cols = [c for c in req_cols if c in cad_ex_df.columns]
+                
+                # Numeric Conversion Fix
+                numeric_targets = ["STD Cons", "CAD Cons", "ACHIEVED CONS", "FABRIC WIDTH"]
+                for col in numeric_targets:
+                    if col in cad_ex_df.columns:
+                        cad_ex_df[col] = pd.to_numeric(cad_ex_df[col], errors='coerce').fillna(0)
 
-                styled = cad_ex_df[final_cols].style.format({
+                # Blue Styling
+                styled_cad = cad_ex_df[final_cols].style.format({
                     "ORD QTY": "{:,.0f}",
-                    "STD Cons": "{:.3f}",
-                    "CAD Cons": "{:.3f}",
-                    "ACHIEVED CONS": "{:.3f}"
+                    "STD Cons": "{:.4f}",
+                    "CAD Cons": "{:.4f}",
+                    "ACHIEVED CONS": "{:.4f}",
+                    "FABRIC WIDTH": "{:.2f}",
+                    "SL. NO.": "{:.0f}"
+                }).set_properties(**{
+                    'background-color': '#ffffff',  
+                    'color': '#0c4a6e',             
+                    'border-color': '#e0f2fe'       
                 })
 
-                st.dataframe(styled, use_container_width=True, height=420)
+                st.dataframe(styled_cad, use_container_width=True, height=400, hide_index=True)
             else:
-                st.success("✅ No CAD Cons issues found")
+                st.success("✅ Good News: No orders found where CAD Cons > STD Cons!")
 
             if st.button("❌ Close CAD Summary"):
                 st.session_state.show_cad_exception = False
                 st.rerun()
 
-
-
-        
         # ----------------------------------------------------------------
         # 🔥 GLOBAL SUMMARY TABLE (WITH STATUS FILTER)
         # ----------------------------------------------------------------
