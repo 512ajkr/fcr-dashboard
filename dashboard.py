@@ -1162,23 +1162,13 @@ else:
                             # Standard White rows
                             return ['background-color: #ffffff; color: #334155;'] * len(row)
 
-                    # 6. LAYOUT: Header + Download Button (The "Toolbar")
-                    h_col1, h_col2 = st.columns([6, 1.5])
-                    with h_col2:
-                        csv_data = summ_df.to_csv(index=False).encode('utf-8')
-                        st.download_button(
-                            label="📥 Download CSV",
-                            data=csv_data,
-                            file_name=f"FCR_Summary_{datetime.now().strftime('%d%b%Y')}.csv",
-                            mime="text/csv",
-                            use_container_width=True
-                        )
-
-                    # 7. RENDER HTML TABLE WITH NEW COLORS
+                    # 7. RENDER HTML TABLE WITH HOVER FIX
                     html_table = disp_df.style.apply(style_total_row, axis=1).hide(axis="index").to_html(escape=False)
                     
-                    st.markdown(
-f"""<div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                    # 🔥 CRITICAL FIX: The f-string below starts at the FAR LEFT.
+                    # Do not add spaces/tabs to align it with the python code, or it will break.
+                    st.markdown(f"""
+<div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
 <style>
 table {{
     width: 100%;
@@ -1186,7 +1176,6 @@ table {{
     font-family: "Source Sans Pro", sans-serif;
     font-size: 14px;
 }}
-/* 🔥 NEW HEADER STYLE: Dark Navy Background + White Text */
 th {{
     background-color: #0f172a; 
     color: #ffffff;
@@ -1201,36 +1190,39 @@ td {{
     padding: 10px 12px;
     text-align: right;
     border-bottom: 1px solid #e2e8f0;
-    color: #334155; /* Darker text for better readability */
+    color: #334155;
     background-color: #ffffff;
 }}
-/* Hover Effect for Data Rows */
-tr:hover td {{
+/* HOVER LOGIC */
+tr:not(:last-child):hover td {{
     background-color: #f1f5f9 !important;
+    color: #0f172a !important;
 }}
-/* Unit Name Column Styling */
+tr:last-child:hover td {{
+    background-color: #2563eb !important; 
+    color: #ffffff !important;
+}}
+/* STICKY FIRST COLUMN */
 td:first-child {{
     text-align: left;
     position: sticky;
     left: 0;
-    background-color: #ffffff; /* Ensure sticky column stays white */
     font-weight: 700;
     color: #0f172a;
     border-right: 2px solid #e2e8f0;
+    background-color: inherit; 
 }}
 th:first-child {{
     text-align: center !important;
     position: sticky;
     left: 0;
-    background-color: #0f172a; /* Match header color */
+    background-color: #0f172a; 
     z-index: 2;
     border-right: 2px solid #334155;
 }}
 </style>
 {html_table}
-</div>""", 
-                        unsafe_allow_html=True
-                    )
+</div>""", unsafe_allow_html=True)
 
                 else:
                     st.warning("⚠️ No data matches the selected filters.")
