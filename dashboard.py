@@ -1162,11 +1162,22 @@ else:
                             # Standard White rows
                             return ['background-color: #ffffff; color: #334155;'] * len(row)
 
-                    # 7. RENDER HTML TABLE WITH HOVER FIX
+                    # 6. LAYOUT: Header + Download Button (The "Toolbar")
+                    h_col1, h_col2 = st.columns([6, 1.5])
+                    with h_col2:
+                        csv_data = summ_df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Download CSV",
+                            data=csv_data,
+                            file_name=f"FCR_Summary_{datetime.now().strftime('%d%b%Y')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+
+                    # 7. RENDER HTML TABLE WITH DARK NAVY HEADER
                     html_table = disp_df.style.apply(style_total_row, axis=1).hide(axis="index").to_html(escape=False)
                     
-                    # 🔥 CRITICAL FIX: The f-string below starts at the FAR LEFT.
-                    # Do not add spaces/tabs to align it with the python code, or it will break.
+                    # NOTE: The f-string below starts at the FAR LEFT to prevent code-block rendering issues.
                     st.markdown(f"""
 <div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
 <style>
@@ -1176,13 +1187,14 @@ table {{
     font-family: "Source Sans Pro", sans-serif;
     font-size: 14px;
 }}
+/* HEADER STYLING */
 th {{
-    background-color: #0f172a; 
+    background-color: #172554; /* 🔥 UPDATED TO DARK NAVY BLUE */
     color: #ffffff;
     font-weight: 700;
     padding: 14px 10px;
     text-align: center !important;
-    border-bottom: 3px solid #334155;
+    border-bottom: 3px solid #1e3a8a; /* Lighter navy border */
     vertical-align: middle;
     letter-spacing: 0.5px;
 }}
@@ -1194,15 +1206,17 @@ td {{
     background-color: #ffffff;
 }}
 /* HOVER LOGIC */
+/* 1. Normal Rows: Turn Light Gray on Hover */
 tr:not(:last-child):hover td {{
     background-color: #f1f5f9 !important;
     color: #0f172a !important;
 }}
+/* 2. Total Row (Last Row): STAY Blue on Hover */
 tr:last-child:hover td {{
     background-color: #2563eb !important; 
     color: #ffffff !important;
 }}
-/* STICKY FIRST COLUMN */
+/* STICKY FIRST COLUMN STYLING */
 td:first-child {{
     text-align: left;
     position: sticky;
@@ -1216,9 +1230,9 @@ th:first-child {{
     text-align: center !important;
     position: sticky;
     left: 0;
-    background-color: #0f172a; 
+    background-color: #172554; /* 🔥 MATCHING DARK NAVY BLUE */
     z-index: 2;
-    border-right: 2px solid #334155;
+    border-right: 2px solid #1e3a8a;
 }}
 </style>
 {html_table}
