@@ -922,19 +922,14 @@ else:
                 st.rerun()
 
         # ----------------------------------------------------------------
-        # 🔥 GLOBAL SUMMARY TABLE (WITH STATUS FILTER)
+        # 🔥 GLOBAL SUMMARY TABLE (WITH STATUS FILTER & FINAL TOTAL ROW)
         # ----------------------------------------------------------------
         if st.session_state.show_summary:
             st.markdown("---")
             st.markdown('<div id="summary_target"></div>', unsafe_allow_html=True)
             components.html(
-                """
-                <script>
-                    window.parent.document.getElementById("summary_target").scrollIntoView({behavior: "smooth", block: "start"});
-                </script>
-                """,
-                height=0,
-                width=0
+                """<script>window.parent.document.getElementById("summary_target").scrollIntoView({behavior: "smooth", block: "start"});</script>""",
+                height=0
             )
             st.subheader("🌍 All Units Summary Report")
             
@@ -942,37 +937,28 @@ else:
                 all_units_data = {}
                 all_months = set()
                 
-                # 1. FIRST PASS: Load all data and identify available Months
+                # 1. FIRST PASS: Load Data
                 for unit_name, config in UNIT_URLS.items():
                     u_url = config.get("dashboard_url", "") if isinstance(config, dict) else str(config)
                     u_df = load_data(u_url)
                     
                     if not u_df.empty:
-                        # Ensure END DATE is datetime and create Week/Month strings from it
                         u_df['END DATE'] = pd.to_datetime(u_df['END DATE'], errors='coerce')
                         u_df['MONTH_STR'] = u_df['END DATE'].dt.strftime('%b-%y').str.upper()
-                        # Create Week string directly from END DATE (e.g., WK01, WK52)
                         u_df['WEEK_FMT'] = u_df['END DATE'].dt.isocalendar().week.apply(lambda x: f"WK{int(x):02d}" if pd.notnull(x) else "N/A")
                         
                         all_units_data[unit_name] = u_df
                         all_months.update(u_df['MONTH_STR'].dropna().unique())
 
-                # 2. RENDER MONTH FILTER FIRST
+                # 2. FILTERS
                 sf1, sf2, sf3 = st.columns(3)
                 
-                # --- NEW DEFAULT MONTH LOGIC ---
                 now = datetime.now()
-                # If today is the 1st week (Day 1 to 7), target the previous month
                 if now.day <= 7:
-                    # Move to the 1st of this month, then subtract 1 day to get the previous month
                     target_date = now.replace(day=1) - timedelta(days=1)
                 else:
-                    # Otherwise, target the current month
                     target_date = now
-                
-                # Format to match your data (e.g., "DEC-25")
                 default_month_str = target_date.strftime('%b-%y').upper()
-                # -------------------------------
 
                 with sf1:
                     summ_sel_month = st.multiselect(
@@ -981,86 +967,251 @@ else:
                         default=[default_month_str] if default_month_str in all_months else []
                     )
 
-                # 3. SECOND PASS: Identify weeks ONLY for the selected months
                 available_weeks = set()
                 for u_df in all_units_data.values():
                     filtered_by_month = u_df[u_df['MONTH_STR'].isin(summ_sel_month)] if summ_sel_month else u_df
                     available_weeks.update(filtered_by_month['WEEK_FMT'].unique())
-                
                 if "N/A" in available_weeks: available_weeks.remove("N/A")
 
-                # 4. RENDER WEEK & STATUS FILTERS (Now dependent on Month)
                 with sf2:
-                    sorted_weeks = sorted(list(available_weeks))
-                    summ_sel_week = st.multiselect("2. Select Week(s)", sorted_weeks, placeholder="All weeks in selected month")
+                    summ_sel_week = st.multiselect("2. Select Week(s)", sorted(list(available_weeks)), placeholder="All weeks")
                 
-                # Get statuses for the selected month/week
                 all_statuses = set()
                 for u_df in all_units_data.values():
                     temp = u_df[u_df['MONTH_STR'].isin(summ_sel_month)] if summ_sel_month else u_df
-                    if summ_sel_week:
-                        temp = temp[temp['WEEK_FMT'].isin(summ_sel_week)]
+                    if summ_sel_week: temp = temp[temp['WEEK_FMT'].isin(summ_sel_week)]
                     all_statuses.update(temp['STATUS'].dropna().unique())
 
                 with sf3:
                     summ_sel_status = st.multiselect("3. Select Status", sorted(list(all_statuses)), default=["Completed"] if "Completed" in all_statuses else [])
 
-                # 4. AGGREGATE DATA
-                # 5. FINAL AGGREGATION
+                # 3. AGGREGATION & NEW FORMULAS
                 summary_rows = []
+                
+                # Variables for Grand Total Calculation
+                gt_ord_qty = 0
+                gt_fab_req = 0
+                gt_weighted_cad_qty = 0 # sum of (Unit ORD * Unit CAD Cons)
+                gt_cut_qty = 0
+                gt_cancut_qty = 0
+                gt_weighted_ach_qty = 0 # sum of (Unit Cut * Unit Achieved Cons) which essentially equals Total Fabric Used
+                gt_stock = 0
+                gt_savings_kg = 0
+                gt_savings_lac = 0
+
                 for unit_name, u_df in all_units_data.items():
                     temp_df = u_df.copy()
                     
-                    # Apply the dynamic filters
-                    if summ_sel_month:
-                        temp_df = temp_df[temp_df['MONTH_STR'].isin(summ_sel_month)]
-                    if summ_sel_week:
-                        temp_df = temp_df[temp_df['WEEK_FMT'].isin(summ_sel_week)]
-                    if summ_sel_status:
-                        temp_df = temp_df[temp_df['STATUS'].isin(summ_sel_status)]
+                    if summ_sel_month: temp_df = temp_df[temp_df['MONTH_STR'].isin(summ_sel_month)]
+                    if summ_sel_week: temp_df = temp_df[temp_df['WEEK_FMT'].isin(summ_sel_week)]
+                    if summ_sel_status: temp_df = temp_df[temp_df['STATUS'].isin(summ_sel_status)]
                     
                     if not temp_df.empty:
-                        # (Keep your existing weighted calculation logic here)
-                        # --- FIXED WEIGHTED CALCULATIONS ---
-                        # 1. Calculate Totals
+                        # --- BASE SUMS FOR UNIT ---
                         s_ord = temp_df['ORD QTY'].sum()
                         s_req = temp_df['FAB Req'].sum()
-                        sum_cut_qty = temp_df['CUT QTY'].sum()
-                        sum_cancut_qty = temp_df['CAN CUT QTY'].sum()
+                        s_cut = temp_df['CUT QTY'].sum()
+                        s_cancut = temp_df['CAN CUT QTY'].sum()
+                        s_used = temp_df['FABRIC USED'].sum() if 'FABRIC USED' in temp_df.columns else 0
+                        s_stock = temp_df['FABRIC LEFTOVER STOCK'].sum()
 
-                        # 2. Calculate Weighted Percentages (Avoid Division by Zero)
-                        # Instead of averaging the percentages, we divide Total Cut / Total Order
-                        weighted_cut_perc = (sum_cut_qty / s_ord) if s_ord > 0 else 0
-                        weighted_cancut_perc = (sum_cancut_qty / s_ord) if s_ord > 0 else 0
+                        # --- WEIGHTED AVERAGES FOR UNIT ---
+                        avg_std = (s_req / s_ord) if s_ord > 0 else 0
+                        avg_ach = (s_used / s_cut) if s_cut > 0 else 0
+                        avg_cad = ((temp_df['CAD Cons'] * temp_df['ORD QTY']).sum() / s_ord) if s_ord > 0 else 0
+                        
+                        w_cut_p = (s_cut / s_ord) if s_ord > 0 else 0     
+                        w_cancut_p = (s_cancut / s_ord) if s_ord > 0 else 0 
+
+                        # --- UNIT METRICS ---
+                        can_to_cut_ratio = (s_cut / s_cancut) if s_cancut > 0 else 0 # Corrected: Cut / CanCut
+                        savings_pct = ((avg_std - avg_ach) / avg_std) if avg_std > 0 else 0
+                        savings_kg = s_ord * (avg_std - avg_ach)
+                        savings_lac = (savings_kg * 500) / 100000
+
+                        # --- ACCUMULATE FOR GRAND TOTAL ---
+                        gt_ord_qty += s_ord
+                        gt_fab_req += s_req
+                        gt_weighted_cad_qty += (temp_df['CAD Cons'] * temp_df['ORD QTY']).sum()
+                        gt_cut_qty += s_cut
+                        gt_cancut_qty += s_cancut
+                        gt_weighted_ach_qty += (s_cut * avg_ach) # Equivalent to s_used ideally
+                        gt_stock += s_stock
+                        gt_savings_kg += savings_kg
+                        gt_savings_lac += savings_lac
 
                         summary_rows.append({
                             "UNIT NAME": unit_name,
                             "ORD QTY": s_ord,
-                            "STD Cons": (s_req / s_ord) if s_ord > 0 else 0,
-                            "CAD Cons": ((temp_df['CAD Cons'] * temp_df['ORD QTY']).sum() / s_ord) if s_ord > 0 else 0,
-                            "CAN CUT %": weighted_cancut_perc,  # Corrected Math
-                            "CUT %": weighted_cut_perc,         # Corrected Math
-                            "LEFTOVER STOCK": temp_df['FABRIC LEFTOVER STOCK'].sum()
+                            "STD Cons": avg_std,
+                            "CAD Cons": avg_cad,
+                            "ACHIEVED CONS": avg_ach,           
+                            "CAN CUT %": w_cancut_p,
+                            "CUT %": w_cut_p,
+                            "Can Cut to Cut%": can_to_cut_ratio, 
+                            "LEFTOVER STOCK": s_stock,
+                            "Savings %": savings_pct,           
+                            "Savings (kg)": savings_kg,         
+                            "Savings (Lac)": savings_lac        
                         })
 
-                # 5. DISPLAY TABLE (Light Blue Style)
+                # 4. CALCULATE GRAND TOTAL ROW
+                if gt_ord_qty > 0:
+                    # Logic provided:
+                    # STD Cons: Total Fab Req / Total Ord Qty
+                    gt_std_cons = gt_fab_req / gt_ord_qty
+                    
+                    # CAD Cons: Sum(Unit Ord * Unit Cad) / Total Ord Qty
+                    gt_cad_cons = gt_weighted_cad_qty / gt_ord_qty
+                    
+                    # Achieved Cons: Sum(Unit Cut * Unit Ach Cons) / Total Cut Qty
+                    gt_ach_cons = (gt_weighted_ach_qty / gt_cut_qty) if gt_cut_qty > 0 else 0
+                    
+                    # Can Cut %: Total Can Cut / Total Ord
+                    gt_cancut_p = gt_cancut_qty / gt_ord_qty
+                    
+                    # Cut %: Total Cut / Total Ord
+                    gt_cut_p = gt_cut_qty / gt_ord_qty
+                    
+                    # Can Cut to Cut %: Total Cut / Total Can Cut
+                    gt_can_to_cut_ratio = (gt_cut_qty / gt_cancut_qty) if gt_cancut_qty > 0 else 0
+                    
+                    # Savings %: (GT STD - GT Achieved) / GT STD
+                    gt_savings_pct = ((gt_std_cons - gt_ach_cons) / gt_std_cons) if gt_std_cons > 0 else 0
+                    
+                    # Append Total Row
+                    summary_rows.append({
+                        "UNIT NAME": "TOTAL SUMMARY",
+                        "ORD QTY": gt_ord_qty,
+                        "STD Cons": gt_std_cons,
+                        "CAD Cons": gt_cad_cons,
+                        "ACHIEVED CONS": gt_ach_cons,
+                        "CAN CUT %": gt_cancut_p,
+                        "CUT %": gt_cut_p,
+                        "Can Cut to Cut%": gt_can_to_cut_ratio,
+                        "LEFTOVER STOCK": gt_stock,
+                        "Savings %": gt_savings_pct,
+                        "Savings (kg)": gt_savings_kg,   # SUM
+                        "Savings (Lac)": gt_savings_lac  # SUM
+                    })
+
+                # 5. DISPLAY TABLE (Best of both worlds: HTML Tooltips + Top-Right Download)
                 if summary_rows:
                     summ_df = pd.DataFrame(summary_rows)
                     
-                    styled_summ = summ_df.style.format({
+                    # 1. Define Column Order
+                    col_order = [
+                        "UNIT NAME", "ORD QTY", "STD Cons", "CAD Cons", "ACHIEVED CONS",
+                        "CAN CUT %", "CUT %", "Can Cut to Cut%", "LEFTOVER STOCK",
+                        "Savings %", "Savings (kg)", "Savings (Lac)"
+                    ]
+                    summ_df = summ_df[col_order]
+
+                    # 2. Define Formulas Map
+                    total_formulas = {
+                        "ORD QTY": "Sum of all units ORD QTY",
+                        "STD Cons": "(Sum of Fabric Req / Sum of ORD QTY)",
+                        "CAD Cons": "Sum(Unit ORD * Unit CAD) / Sum(Total ORD)",
+                        "ACHIEVED CONS": "Sum(Unit CUT * Unit Achieved) / Sum(Total CUT)",
+                        "CAN CUT %": "Sum(Total Can Cut Qty) / Sum(Total ORD QTY)",
+                        "CUT %": "Sum(Total Cut Qty) / Sum(Total ORD QTY)",
+                        "Can Cut to Cut%": "Sum(Total CUT QTY) / Sum(Total CAN CUT QTY)",
+                        "LEFTOVER STOCK": "Sum of all units Stock",
+                        "Savings %": "(GT STD Cons - GT Achieved Cons) / GT STD Cons",
+                        "Savings (kg)": "Sum of all units Savings (kg)",
+                        "Savings (Lac)": "Sum of all units Savings (Lac)"
+                    }
+
+                    # 3. Create Display DataFrame (Formatted Strings)
+                    disp_df = summ_df.copy()
+                    
+                    format_dict = {
                         "ORD QTY": "{:,.0f}",
                         "STD Cons": "{:.3f}",
                         "CAD Cons": "{:.3f}",
+                        "ACHIEVED CONS": "{:.3f}",
                         "CAN CUT %": "{:.2%}",
                         "CUT %": "{:.2%}",
-                        "LEFTOVER STOCK": "{:,.2f}"
-                    }).set_properties(**{
-                        'background-color': '#e0f2fe',  # Light Blue
-                        'color': '#0c4a6e',             # Dark Blue Text
-                        'border-color': '#ffffff'
-                    })
+                        "Can Cut to Cut%": "{:.2%}",
+                        "LEFTOVER STOCK": "{:,.2f}",
+                        "Savings %": "{:.2%}",
+                        "Savings (kg)": "{:,.2f}",
+                        "Savings (Lac)": "{:,.2f}"
+                    }
+                    
+                    for col, fmt in format_dict.items():
+                        if col in disp_df.columns:
+                            disp_df[col] = disp_df[col].apply(lambda x: fmt.format(x) if pd.notnull(x) else "")
 
-                    st.dataframe(styled_summ, use_container_width=True, hide_index=True)
+                    # 4. Inject HTML Tooltips into the TOTAL SUMMARY row
+                    mask_total = disp_df["UNIT NAME"] == "TOTAL SUMMARY"
+                    
+                    for col, formula in total_formulas.items():
+                        if col in disp_df.columns:
+                            # We add a 'title' attribute which is the browser's native tooltip
+                            disp_df.loc[mask_total, col] = disp_df.loc[mask_total, col].apply(
+                                lambda x: f'<span title="{formula}" style="cursor: help; border-bottom: 2px dotted #a5f3fc;">{x}</span>'
+                            )
+
+                    # 5. Define Style Function
+                    def style_total_row(row):
+                        if row["UNIT NAME"] == "TOTAL SUMMARY":
+                            return ['background-color: #0c4a6e; color: white; font-weight: bold; border-top: 2px solid #0ea5e9;'] * len(row)
+                        else:
+                            return ['background-color: #f0f9ff; color: #0c4a6e; border-bottom: 1px solid #e0f2fe;'] * len(row)
+
+                    # 6. LAYOUT: Header + Download Button (The "Toolbar")
+                    # We use columns to put the download button on the far right
+                    h_col1, h_col2 = st.columns([6, 1.5])
+                    with h_col2:
+                        csv_data = summ_df.to_csv(index=False).encode('utf-8')
+                        st.download_button(
+                            label="📥 Download CSV",
+                            data=csv_data,
+                            file_name=f"FCR_Summary_{datetime.now().strftime('%d%b%Y')}.csv",
+                            mime="text/csv",
+                            use_container_width=True
+                        )
+
+                    # 7. RENDER HTML TABLE
+                    html_table = disp_df.style.apply(style_total_row, axis=1).hide(axis="index").to_html(escape=False)
+                    
+                    # Note: No indentation in the f-string to prevent code-block rendering issues
+                    st.markdown(
+f"""
+<div style="overflow-x: auto; border: 1px solid #e0f2fe; border-radius: 8px;">
+<style>
+table {{
+    width: 100%;
+    border-collapse: collapse;
+    font-family: "Source Sans Pro", sans-serif;
+    font-size: 14px;
+}}
+th {{
+    background-color: #f0f2f6;
+    color: #31333F;
+    font-weight: 600;
+    padding: 10px;
+    text-align: right;
+    border-bottom: 2px solid #e6e9ef;
+}}
+td {{
+    padding: 8px 10px;
+    text-align: right;
+}}
+td:first-child, th:first-child {{
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background-color: inherit;
+}}
+</style>
+{html_table}
+</div>
+""",
+                        unsafe_allow_html=True
+                    )
+
                 else:
                     st.warning("⚠️ No data matches the selected filters.")
 
