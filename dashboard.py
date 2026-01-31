@@ -1153,15 +1153,16 @@ else:
                                 lambda x: f'<span title="{formula}" style="cursor: help; border-bottom: 2px dotted #a5f3fc;">{x}</span>'
                             )
 
-                    # 5. Define Style Function
+                    # 5. Define Style Function (Updated Colors)
                     def style_total_row(row):
                         if row["UNIT NAME"] == "TOTAL SUMMARY":
-                            return ['background-color: #0c4a6e; color: white; font-weight: bold; border-top: 2px solid #0ea5e9;'] * len(row)
+                            # 🔥 Vibrant Blue for Total Row
+                            return ['background-color: #2563eb; color: white; font-weight: bold; border-top: 2px solid #1e40af;'] * len(row)
                         else:
-                            return ['background-color: #f0f9ff; color: #0c4a6e; border-bottom: 1px solid #e0f2fe;'] * len(row)
+                            # Standard White rows
+                            return ['background-color: #ffffff; color: #334155;'] * len(row)
 
                     # 6. LAYOUT: Header + Download Button (The "Toolbar")
-                    # We use columns to put the download button on the far right
                     h_col1, h_col2 = st.columns([6, 1.5])
                     with h_col2:
                         csv_data = summ_df.to_csv(index=False).encode('utf-8')
@@ -1173,13 +1174,11 @@ else:
                             use_container_width=True
                         )
 
-                    # 7. RENDER HTML TABLE
+                    # 7. RENDER HTML TABLE WITH NEW COLORS
                     html_table = disp_df.style.apply(style_total_row, axis=1).hide(axis="index").to_html(escape=False)
                     
-                    # Note: No indentation in the f-string to prevent code-block rendering issues
                     st.markdown(
-f"""
-<div style="overflow-x: auto; border: 1px solid #e0f2fe; border-radius: 8px;">
+f"""<div style="overflow-x: auto; border: 1px solid #cbd5e1; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
 <style>
 table {{
     width: 100%;
@@ -1187,28 +1186,49 @@ table {{
     font-family: "Source Sans Pro", sans-serif;
     font-size: 14px;
 }}
+/* 🔥 NEW HEADER STYLE: Dark Navy Background + White Text */
 th {{
-    background-color: #f0f2f6;
-    color: #31333F;
-    font-weight: 600;
-    padding: 10px;
-    text-align: right;
-    border-bottom: 2px solid #e6e9ef;
+    background-color: #0f172a; 
+    color: #ffffff;
+    font-weight: 700;
+    padding: 14px 10px;
+    text-align: center !important;
+    border-bottom: 3px solid #334155;
+    vertical-align: middle;
+    letter-spacing: 0.5px;
 }}
 td {{
-    padding: 8px 10px;
+    padding: 10px 12px;
     text-align: right;
+    border-bottom: 1px solid #e2e8f0;
+    color: #334155; /* Darker text for better readability */
+    background-color: #ffffff;
 }}
-td:first-child, th:first-child {{
+/* Hover Effect for Data Rows */
+tr:hover td {{
+    background-color: #f1f5f9 !important;
+}}
+/* Unit Name Column Styling */
+td:first-child {{
     text-align: left;
     position: sticky;
     left: 0;
-    background-color: inherit;
+    background-color: #ffffff; /* Ensure sticky column stays white */
+    font-weight: 700;
+    color: #0f172a;
+    border-right: 2px solid #e2e8f0;
+}}
+th:first-child {{
+    text-align: center !important;
+    position: sticky;
+    left: 0;
+    background-color: #0f172a; /* Match header color */
+    z-index: 2;
+    border-right: 2px solid #334155;
 }}
 </style>
 {html_table}
-</div>
-""",
+</div>""", 
                         unsafe_allow_html=True
                     )
 
