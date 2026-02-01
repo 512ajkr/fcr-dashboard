@@ -30,19 +30,15 @@ st_autorefresh(interval=15 * 60 * 1000, key="datarefresh")
 # Default URLs (Fallbacks)
 DEFAULT_URLS = {
     "ARASIKERE": {
-        "dashboard_url": "https://arvindgroup-my.sharepoint.com/:x:/g/personal/gedshirts_consultant_arvind_in/IQDTVZTVcdtOR7ybfN3eIpoIAWe7c7bBJCchZmw2vZNKgqs?e=ghJlMW&download=1",
-        "excel_url": "" 
-    },
-    "RANCHI": {
-        "dashboard_url": "https://arvindgroup-my.sharepoint.com/:x:/g/personal/gedshirts_consultant_arvind_in/IQCkdQtFfWX-Q7TFJS4LEm2vAfbJShQrsi48PbatXXJ03Ms?e=eskvlI&download=1",
-        "excel_url": "" 
-    },
-    "INDORE": {
-        "dashboard_url": "https://arvindgroup-my.sharepoint.com/:x:/g/personal/gedshirts_consultant_arvind_in/IQCMvYuFTGY5SYl-VS7Fg70AATSU9eGqXevKDKSLc2V-3aI?e=CtZ4A5&download=1",
+        "dashboard_url": "",
         "excel_url": ""
     },
-    "MATODA": {
-        "dashboard_url": "https://arvindgroup-my.sharepoint.com/:x:/g/personal/gedshirts_consultant_arvind_in/IQAPWXjEjFzBSa2tKsCIgXHeAZnDDmdiKwRv4tx15FrsyRM?e=su0DUf&download=1",
+    "ECITY": {
+        "dashboard_url": "",
+        "excel_url": ""
+    },
+    "ECITY HUGO BOSS": {
+        "dashboard_url": "",
         "excel_url": ""
     }
 }
