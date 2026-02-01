@@ -18,7 +18,7 @@ from streamlit_autorefresh import st_autorefresh
 
 # ================= PAGE CONFIG =================
 st.set_page_config(
-    page_title="FCR Knits Dashboard",
+    page_title="FCR Woven Dashboard",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
@@ -75,7 +75,7 @@ def load_config():
     try:
         db = get_db()
         if db:
-            doc_ref = db.collection("settings").document("unit_config")
+            doc_ref = db.collection("settings").document("woven_config")
             doc = doc_ref.get()
             if doc.exists:
                 return doc.to_dict()
@@ -91,7 +91,7 @@ def save_config(data):
     try:
         db = get_db()
         if db:
-            doc_ref = db.collection("settings").document("unit_config")
+            doc_ref = db.collection("settings").document("woven_config")
             doc_ref.set(data)
     except Exception:
         pass
@@ -434,12 +434,12 @@ else:
                       color: white; 
                       cursor: pointer;" 
                title="Open Original Reference Excel for {selected_unit}">
-               FCR KNITS - {selected_unit}
+               FCR WOVEN - {selected_unit}
             </a>
             """
         else:
             # Non-clickable if no link exists
-            title_html = f"FCR KNITS - {selected_unit}"
+            title_html = f"FCR WOVEN - {selected_unit}"
 
         # 3. Render the Ribbon
         st.markdown(f"""
