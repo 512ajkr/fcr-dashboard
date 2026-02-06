@@ -551,11 +551,11 @@ else:
         sum_rcvd = dff['FAB RCVD'].sum()
         sum_used = dff['FABRIC USED'].sum() if 'FABRIC USED' in dff.columns else 0
         sum_stock = dff['FABRIC LEFTOVER STOCK'].sum()
-        # ---------------- Roll Access / Shortage (Force Signs) ----------------
-        if "ROLL ACCESS" in dff.columns:
-            roll_access = dff["ROLL ACCESS"].abs().sum()
+        # ---------------- Roll Excess / Shortage (Force Signs) ----------------
+        if "ROLL EXCESS" in dff.columns:
+            roll_excess = dff["ROLL EXCESS"].abs().sum()
         else:
-            roll_access = 0
+            roll_excess = 0
 
         if "ROLL SHORTAGE" in dff.columns:
             roll_shortage = -dff["ROLL SHORTAGE"].abs().sum()   # always negative
@@ -589,7 +589,7 @@ else:
         ex1_count = len(dff[dff['CUT %'] < 1])
         ex2_count = len(dff[(dff['CAN CUT %'] < 1.0) & (dff['CUT %'] < 1.0)]) # Updated
         ex3_count = len(dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.01)]) # Updated
-        ex4_count = len(dff[dff['ROLL ACCESS'] > 0]) if 'ROLL ACCESS' in dff.columns else 0
+        ex4_count = len(dff[dff['ROLL EXCESS'] > 0]) if 'ROLL EXCESS' in dff.columns else 0
         ex5_count = len(dff[dff['ROLL SHORTAGE'].notnull() & (dff['ROLL SHORTAGE'] != 0)]) if 'ROLL SHORTAGE' in dff.columns else 0
         
         def fmt(v): return str(v) if v>0 else "--"
@@ -612,7 +612,7 @@ else:
         rcvd_color = txt_green if sum_rcvd >= sum_req else txt_red
         used_color = txt_black
         stock_color = txt_green if sum_stock >= 0 else txt_red
-        roll_access_color = txt_green if roll_access >= 0 else txt_red
+        roll_excess_color = txt_green if roll_excess >= 0 else txt_red
         roll_shortage_color = txt_green if roll_shortage >= 0 else txt_red
 
 
@@ -681,11 +681,11 @@ else:
                 ("Fabric Leftover", f"{sum_stock:,.2f}", stock_color, "Fabric Remaining Stock (Received - Used)", None),
 
                 # 🔥 NEW 5th ROW
-                ("Roll Access / Shortage",
-                f"<span style='color:{roll_access_color};font-weight:800;'>+{roll_access:,.0f}</span> / "
+                ("Roll Excess / Shortage",
+                f"<span style='color:{roll_excess_color};font-weight:800;'>+{roll_excess:,.0f}</span> / "
                 f"<span style='color:{roll_shortage_color};font-weight:800;'>{roll_shortage:,.0f}</span>",
                 txt_black,
-                "Access = Positive | Shortage = Negative",
+                "Excess = Positive | Shortage = Negative",
                 None)
 
             ], alert_trigger=alert_fab)
@@ -743,11 +743,11 @@ else:
             # --- ROW 2: CUT% < CAN CUT% ---
             render_centered_card("bg-green", "CUT% < CAN CUT%", fmt(ex3_count), "btn_ex3", "ex3")
             
-            # --- ROW 3: ROLL ACCESS & ROLL SHORTAGE Side-by-Side ---
+            # --- ROW 3: ROLL EXCESS & ROLL SHORTAGE Side-by-Side ---
             r3_col1, r3_col2 = st.columns(2)
             with r3_col1:
                 # Using a custom color class if desired, otherwise bg-indigo/cyan
-                render_centered_card("bg-indigo", "ROLL ACCESS", fmt(ex4_count), "btn_ex4", "ex4")
+                render_centered_card("bg-indigo", "ROLL EXCESS", fmt(ex4_count), "btn_ex4", "ex4")
             with r3_col2:
                 render_centered_card("bg-green", "ROLL SHORTAGE", fmt(ex5_count), "btn_ex5", "ex5")
 
@@ -854,8 +854,8 @@ else:
                 detail_df = dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.01)].copy()
                 view_title = "📉 Orders where CUT % < CAN CUT %"
             elif st.session_state.active_exception_view == 'ex4':
-                detail_df = dff[dff['ROLL ACCESS'] > 0].copy() if 'ROLL ACCESS' in dff.columns else pd.DataFrame()
-                view_title = "✅ Orders with ROLL ACCESS"
+                detail_df = dff[dff['ROLL EXCESS'] > 0].copy() if 'ROLL EXCESS' in dff.columns else pd.DataFrame()
+                view_title = "✅ Orders with ROLL EXCESS"
             elif st.session_state.active_exception_view == 'ex5':
                 if 'ROLL SHORTAGE' in dff.columns:
                     detail_df = dff[dff['ROLL SHORTAGE'].notnull() & (dff['ROLL SHORTAGE'] != 0)].copy()
@@ -874,7 +874,7 @@ else:
                     'SL. NO.', 'BUYER', 'STYLE NO', 'COLOUR', 'PO NUMBER', 'ORD QTY', 
                     'CAN CUT %', 'CUT %', 'STD Cons', 'CAD Cons', 'FABRIC WIDTH', 
                     'ACHIEVED CONS', 'FAB RCVD', 'FABRIC USED', 'FABRIC LEFTOVER STOCK', 
-                    'ROLL ACCESS', 'ROLL SHORTAGE', 'REMARKS'
+                    'ROLL EXCESS', 'ROLL SHORTAGE', 'REMARKS'
                 ]
                 final_cols = [c for c in req_cols if c in detail_df.columns]
 
@@ -900,7 +900,7 @@ else:
                 format_dict = {
                     'ORD QTY': '{:,.0f}',
                     'FABRIC LEFTOVER STOCK': '{:,.2f}',
-                    'ROLL ACCESS': '{:,.2f}',
+                    'ROLL EXCESS': '{:,.2f}',
                     'ROLL SHORTAGE': '{:,.2f}',
                     'STD Cons': '{:.3f}',
                     'CAD Cons': '{:.3f}',
