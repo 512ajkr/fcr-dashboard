@@ -151,8 +151,10 @@ div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
     box-shadow: 0 4px 6px rgba(0,0,0,0.05);
     border: 2px solid #38bdf8; 
     height: 100%;
+    min-height: 340px;   /* 🔥 ADD THIS LINE */
     transition: all 0.3s ease;
 }
+
 
 /* 🔥 ALERT ANIMATION KEYFRAMES (RED GLOW) */
 @keyframes flashRed {
@@ -549,6 +551,19 @@ else:
         sum_rcvd = dff['FAB RCVD'].sum()
         sum_used = dff['FABRIC USED'].sum() if 'FABRIC USED' in dff.columns else 0
         sum_stock = dff['FABRIC LEFTOVER STOCK'].sum()
+        # ---------------- Roll Access / Shortage (Force Signs) ----------------
+        if "ROLL ACCESS" in dff.columns:
+            roll_access = dff["ROLL ACCESS"].abs().sum()
+        else:
+            roll_access = 0
+
+        if "ROLL SHORTAGE" in dff.columns:
+            roll_shortage = -dff["ROLL SHORTAGE"].abs().sum()   # always negative
+        else:
+            roll_shortage = 0
+
+
+
         
         # Weighted/Total Based Formulas
         # 1. STD Cons: (Sum of FAB Req) / (Sum of ORD QTY)
@@ -574,6 +589,8 @@ else:
         ex1_count = len(dff[dff['CUT %'] < 1])
         ex2_count = len(dff[(dff['CAN CUT %'] < 1.0) & (dff['CUT %'] < 1.0)]) # Updated
         ex3_count = len(dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.01)]) # Updated
+        ex4_count = len(dff[dff['ROLL ACCESS'] > 0]) if 'ROLL ACCESS' in dff.columns else 0
+        ex5_count = len(dff[dff['ROLL SHORTAGE'].notnull() & (dff['ROLL SHORTAGE'] != 0)]) if 'ROLL SHORTAGE' in dff.columns else 0
         
         def fmt(v): return str(v) if v>0 else "--"
 
@@ -595,6 +612,9 @@ else:
         rcvd_color = txt_green if sum_rcvd >= sum_req else txt_red
         used_color = txt_black
         stock_color = txt_green if sum_stock >= 0 else txt_red
+        roll_access_color = txt_green if roll_access >= 0 else txt_red
+        roll_shortage_color = txt_green if roll_shortage >= 0 else txt_red
+
 
         # Consumption
         std_color = txt_black
@@ -658,8 +678,19 @@ else:
                 ("Fabric Required", f"{sum_req:,.2f}", req_color, "Total of (Order Qty * STD CONS)", None),
                 ("Fabric Received", f"{sum_rcvd:,.2f} ({perf_rcvd:.2f}%)", rcvd_color, "Total Fabric Received from store (Percentage of Required)", None),
                 ("Fabric Used", f"{sum_used:,.2f}", used_color, "Total Fabric consumed in cutting", None),
-                ("Fabric Leftover", f"{sum_stock:,.2f}", stock_color, "Fabric Remaining Stock (Received - Used)", None)
+                ("Fabric Leftover", f"{sum_stock:,.2f}", stock_color, "Fabric Remaining Stock (Received - Used)", None),
+
+                # 🔥 NEW 5th ROW
+                ("Roll Access / Shortage",
+                f"<span style='color:{roll_access_color};font-weight:800;'>+{roll_access:,.0f}</span> / "
+                f"<span style='color:{roll_shortage_color};font-weight:800;'>{roll_shortage:,.0f}</span>",
+                txt_black,
+                "Access = Positive | Shortage = Negative",
+                None)
+
             ], alert_trigger=alert_fab)
+
+
 
 
         with c_cons:
@@ -694,26 +725,39 @@ else:
         c1, c2 = st.columns([1, 2])
         with c1:
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+            
+            # Helper Function (Keep your existing one, just added a background color option)
             def render_centered_card(bg_class, title, count, btn_key, view_id):
                 st.markdown(f'<div class="exception-card-container {bg_class}"><div class="ex-text-group"><div class="ex-lbl">{title}</div><div class="ex-val">{count}</div></div></div>', unsafe_allow_html=True)
                 st.markdown('<div class="info-btn-css">', unsafe_allow_html=True)
                 if st.button("ⓘ", key=btn_key): st.session_state.active_exception_view = view_id
                 st.markdown('</div><div class="spacer-area"></div>', unsafe_allow_html=True)
 
-            render_centered_card("bg-indigo", "CUT% < 100%", fmt(ex1_count), "btn_ex1", "ex1")
-            render_centered_card("bg-cyan", "CAN CUT% < 100%", fmt(ex2_count), "btn_ex2", "ex2")
+            # --- ROW 1: CUT% and CAN CUT% Side-by-Side ---
+            r1_col1, r1_col2 = st.columns(2)
+            with r1_col1:
+                render_centered_card("bg-indigo", "CUT% < 100%", fmt(ex1_count), "btn_ex1", "ex1")
+            with r1_col2:
+                render_centered_card("bg-cyan", "CAN CUT% < 100%", fmt(ex2_count), "btn_ex2", "ex2")
+
+            # --- ROW 2: CUT% < CAN CUT% ---
             render_centered_card("bg-green", "CUT% < CAN CUT%", fmt(ex3_count), "btn_ex3", "ex3")
             
-            # --- SUMMARY BUTTON ---
+            # --- ROW 3: ROLL ACCESS & ROLL SHORTAGE Side-by-Side ---
+            r3_col1, r3_col2 = st.columns(2)
+            with r3_col1:
+                # Using a custom color class if desired, otherwise bg-indigo/cyan
+                render_centered_card("bg-indigo", "ROLL ACCESS", fmt(ex4_count), "btn_ex4", "ex4")
+            with r3_col2:
+                render_centered_card("bg-green", "ROLL SHORTAGE", fmt(ex5_count), "btn_ex5", "ex5")
+
+            # --- SUMMARY & CAD BUTTONS ---
             st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
             if st.button("📋 View All Units Summary", use_container_width=True):
                 st.session_state.show_summary = True
             
-            # --- 🔥 MOVED CAD BUTTON HERE ---
-            # Only show if CAD Consumption is higher than Standard (Alert State)
             if avg_cad > avg_std:
                 st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
-                # type="primary" makes it stand out (usually red/highlighted)
                 if st.button("🚨 View CAD Exceptions", use_container_width=True, type="primary"):
                     st.session_state.show_cad_exception = True
                     st.rerun()
@@ -789,68 +833,97 @@ else:
         # Detail Table
         if st.session_state.active_exception_view:
             st.markdown("---")
-            st.markdown('<div id="summary_target"></div>', unsafe_allow_html=True)
+            st.markdown('<div id="details_target"></div>', unsafe_allow_html=True)
             components.html(
-                """
-                <script>
-                    window.parent.document.getElementById("summary_target").scrollIntoView({behavior: "smooth", block: "start"});
-                </script>
-                """,
-                height=0,
-                width=0
+                """<script>window.parent.document.getElementById("details_target").scrollIntoView({behavior: "smooth", block: "start"});</script>""",
+                height=0
             )
+            
             detail_df = pd.DataFrame()
             view_title = ""
-            view_color = ""
+            view_color = "#0c4a6e"
 
+            # 1. DATA SELECTION
             if st.session_state.active_exception_view == 'ex1':
                 detail_df = dff[dff['CUT %'] < 1].copy()
                 view_title = "🚨 Orders with CUT % < 100%"
-                view_color = "#6366f1"
             elif st.session_state.active_exception_view == 'ex2':
-                # This filter now ensures you only see rows where both percentages are under 100%
-                detail_df = dff[(dff['CAN CUT %'] < 1.0) & (dff['CUT %'] < 1.0)].copy() 
-                view_title = "⚠️ Orders with CAN CUT % < 100% (Excl. Cut ≥100%)"
-                view_color = "#06b6d4"
+                detail_df = dff[(dff['CAN CUT %'] < 1.0) & (dff['CUT %'] < 1.0)].copy()
+                view_title = "⚠️ Orders with CAN CUT % < 100%"
             elif st.session_state.active_exception_view == 'ex3':
-                # Updated filter to exclude anything where CUT % is 101% or higher
                 detail_df = dff[(dff['CUT %'] < dff['CAN CUT %']) & (dff['CUT %'] < 1.01)].copy()
-                view_title = "📉 Orders where CUT % < CAN CUT % (Excl. >101%)"
-                view_color = "#10b981"
+                view_title = "📉 Orders where CUT % < CAN CUT %"
+            elif st.session_state.active_exception_view == 'ex4':
+                detail_df = dff[dff['ROLL ACCESS'] > 0].copy() if 'ROLL ACCESS' in dff.columns else pd.DataFrame()
+                view_title = "✅ Orders with ROLL ACCESS"
+            elif st.session_state.active_exception_view == 'ex5':
+                if 'ROLL SHORTAGE' in dff.columns:
+                    detail_df = dff[dff['ROLL SHORTAGE'].notnull() & (dff['ROLL SHORTAGE'] != 0)].copy()
+                else:
+                    detail_df = pd.DataFrame()
+                
+                view_title = "📉 Orders with ROLL SHORTAGE (All Populated Entries)"
 
             if not detail_df.empty:
+                # 2. PREPARATION
                 detail_df.reset_index(drop=True, inplace=True)
                 detail_df.insert(0, 'SL. NO.', range(1, 1 + len(detail_df)))
+                
+                # Added CAN CUT % and CUT % to ensure styling works
+                req_cols = [
+                    'SL. NO.', 'BUYER', 'STYLE NO', 'COLOUR', 'PO NUMBER', 'ORD QTY', 
+                    'CAN CUT %', 'CUT %', 'STD Cons', 'CAD Cons', 'FABRIC WIDTH', 
+                    'ACHIEVED CONS', 'FAB RCVD', 'FABRIC USED', 'FABRIC LEFTOVER STOCK', 
+                    'ROLL ACCESS', 'ROLL SHORTAGE', 'REMARKS'
+                ]
+                final_cols = [c for c in req_cols if c in detail_df.columns]
 
-            disp_cols = ['SL. NO.', 'BUYER', 'STYLE NO', 'COLOUR', 'ORD QTY', 'CAN CUT %', 'CUT %', 'FABRIC LEFTOVER STOCK', 'REMARKS']
-            final_cols = [c for c in disp_cols if c in detail_df.columns]
+                # 3. HEADER
+                h1, h2 = st.columns([4, 1])
+                with h1: 
+                    st.markdown(f"<h3 style='color:{view_color};'>{view_title} ({len(detail_df)} Records)</h3>", unsafe_allow_html=True)
+                with h2:
+                    if st.button("❌ Close Details", use_container_width=True):
+                        st.session_state.active_exception_view = None
+                        st.rerun()
 
-            h1, h2 = st.columns([4, 1])
-            with h1:
-                st.markdown(f"<h3 style='color:{view_color};'>{view_title} ({len(detail_df)} Records)</h3>", unsafe_allow_html=True)
-            with h2:
-                if st.button("❌ Close Details", use_container_width=True):
-                    st.session_state.active_exception_view = None
-                    st.rerun()
-
-            if not detail_df.empty:
+                # 4. SAFE STYLING & FORMATTING
+                # Helper for red text
                 def color_red_if_low(val):
-                    if isinstance(val, (int, float)) and val < 1.0:
-                        return 'color: #dc2626; font-weight: bold;'
+                    try:
+                        if isinstance(val, (int, float)) and val < 1.0:
+                            return 'color: #dc2626; font-weight: bold;'
+                    except: pass
                     return ''
 
-                styled_df = detail_df[final_cols].style.format({
-                    'SL. NO.': '{:.0f}',
+                # Create format dictionary only for columns that exist
+                format_dict = {
                     'ORD QTY': '{:,.0f}',
                     'FABRIC LEFTOVER STOCK': '{:,.2f}',
+                    'ROLL ACCESS': '{:,.2f}',
+                    'ROLL SHORTAGE': '{:,.2f}',
+                    'STD Cons': '{:.3f}',
+                    'CAD Cons': '{:.3f}',
+                    'ACHIEVED CONS': '{:.3f}',
                     'CAN CUT %': '{:.2%}',
                     'CUT %': '{:.2%}'
-                })\
-                .applymap(color_red_if_low, subset=['CAN CUT %', 'CUT %'])\
-                .set_properties(**{'background-color': '#f8fafc', 'color': '#000080', 'border-color': '#cbd5e1'})
+                }
+                active_formats = {k: v for k, v in format_dict.items() if k in final_cols}
 
+                # Apply styling
+                styled_df = detail_df[final_cols].style.format(active_formats)
+                
+                # Apply red color logic if the percentage columns exist
+                perc_cols = [c for c in ['CAN CUT %', 'CUT %'] if c in final_cols]
+                if perc_cols:
+                    styled_df = styled_df.applymap(color_red_if_low, subset=perc_cols)
+
+                # 5. FINAL DISPLAY
                 st.dataframe(
-                    styled_df, use_container_width=True, height=400, hide_index=True,
+                    styled_df, 
+                    use_container_width=True, 
+                    height=450, 
+                    hide_index=True,
                     column_config={
                         "SL. NO.": st.column_config.NumberColumn("SL. NO.", width="small"),
                         "REMARKS": st.column_config.TextColumn("Remarks", width="large"),
@@ -858,7 +931,10 @@ else:
                     }
                 )
             else:
-                st.success("✅ No exceptions found!")
+                st.success("✅ No records found for the selected exception.")
+                if st.button("Close Panel"):
+                    st.session_state.active_exception_view = None
+                    st.rerun()
             
         # ----------------------------------------------------------------
         # 🚨 CAD CONS EXCEPTION TABLE (Triggered by Button)
