@@ -724,19 +724,24 @@ else:
 
         with c2:
             if 'BUYER' in dff.columns and not dff.empty:
-                # 1. Faster Aggregation
+                # 1. Aggregation by Summing Quantities
                 dfc = dff.groupby('BUYER').agg({
-                    'CAN CUT %': 'mean',
-                    'CUT %': 'mean'
+                    'CUT QTY': 'sum',
+                    'CAN CUT QTY': 'sum',
+                    'ORD QTY': 'sum'
                 }).reset_index()
                 
-                dfc['CAN CUT %'] *= 100
-                dfc['CUT %'] *= 100
+                # 2. Calculate Weighted Percentages (Total / Total)
+                # We use fillna(0) to handle any cases where ORD QTY might be 0
+                dfc['CUT %'] = (dfc['CUT QTY'] / dfc['ORD QTY'] * 100).fillna(0)
+                dfc['CAN CUT %'] = (dfc['CAN CUT QTY'] / dfc['ORD QTY'] * 100).fillna(0)
+
+                # 3. Sort by Can Cut Performance
                 dfc = dfc.sort_values(by='CAN CUT %', ascending=False)
 
                 fig = go.Figure()
                 
-                # 2. Optimized Bar Traces
+                # 4. Bar Traces
                 fig.add_trace(go.Bar(
                     x=dfc['BUYER'], y=dfc['CAN CUT %'], name="Can Cut %", 
                     marker=dict(color="#2c6e9e"),
@@ -760,19 +765,14 @@ else:
 
                 fig.update_layout(
                     title=dict(
-                        text="📈 Performance by Buyer", 
+                        text="📈 Performance by Buyer (Weighted)", 
                         font=dict(size=22, color="#1e293b", weight=700),
                         x=0.01 
                     ),
                     hovermode="x unified", 
                     barmode='group', 
                     height=400,
-                    
-                    # --- 🔥 UPDATED MARGINS HERE 🔥 ---
-                    # Changed 'b' (bottom) from 20 to 60 to give space for Buyer Names
                     margin=dict(l=20, r=40, t=60, b=60), 
-                    # ----------------------------------
-
                     showlegend=True,
                     legend=dict(
                         orientation="h", 
@@ -781,12 +781,11 @@ else:
                         xanchor="right", 
                         x=0.98 
                     ),
-                    yaxis=dict(showgrid=True, gridcolor='#f1f5f9'),
+                    yaxis=dict(showgrid=True, gridcolor='#f1f5f9', title="Percentage (%)"),
                     xaxis=dict(showgrid=False)
                 )
 
-                # 3. Use 'use_container_width=True' and turn off 'displaylogo'
-                st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False, 'staticPlot': False})
+                st.plotly_chart(fig, use_container_width=True, config={'displaylogo': False})
             else:
                 st.info("No data available for the selected filters.")
 
