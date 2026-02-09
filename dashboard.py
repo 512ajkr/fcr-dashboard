@@ -1122,7 +1122,7 @@ else:
                             "Can Cut to Cut%": can_to_cut_ratio, 
                             "LEFTOVER STOCK": s_stock,
                             "Savings %": savings_pct,           
-                            "Savings (kg)": savings_kg,         
+                            "Savings (mtr)": savings_kg,         
                             "Savings (Lac)": savings_lac        
                         })
 
@@ -1162,7 +1162,7 @@ else:
                         "Can Cut to Cut%": gt_can_to_cut_ratio,
                         "LEFTOVER STOCK": gt_stock,
                         "Savings %": gt_savings_pct,
-                        "Savings (kg)": gt_savings_kg,   # SUM
+                        "Savings (mtr)": gt_savings_kg,   # SUM
                         "Savings (Lac)": gt_savings_lac  # SUM
                     })
 
@@ -1174,7 +1174,7 @@ else:
                     col_order = [
                         "UNIT NAME", "ORD QTY", "STD Cons", "CAD Cons", "ACHIEVED CONS",
                         "CAN CUT %", "CUT %", "Can Cut to Cut%", "LEFTOVER STOCK",
-                        "Savings %", "Savings (kg)", "Savings (Lac)"
+                        "Savings %", "Savings (mtr)", "Savings (Lac)"
                     ]
                     summ_df = summ_df[col_order]
 
@@ -1189,7 +1189,7 @@ else:
                         "Can Cut to Cut%": "Sum(Total CUT QTY) / Sum(Total CAN CUT QTY)",
                         "LEFTOVER STOCK": "Sum of all units Stock",
                         "Savings %": "(GT STD Cons - GT Achieved Cons) / GT STD Cons",
-                        "Savings (kg)": "Sum of all units Savings (kg)",
+                        "Savings (mtr)": "Sum of all units Savings (mtr)",
                         "Savings (Lac)": "Sum of all units Savings (Lac)"
                     }
 
@@ -1206,7 +1206,7 @@ else:
                         "Can Cut to Cut%": "{:.2%}",
                         "LEFTOVER STOCK": "{:,.2f}",
                         "Savings %": "{:.2%}",
-                        "Savings (kg)": "{:,.2f}",
+                        "Savings (mtr)": "{:,.2f}",
                         "Savings (Lac)": "{:,.2f}"
                     }
                     
