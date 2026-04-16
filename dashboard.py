@@ -849,7 +849,7 @@ else:
                     'CAN CUT %': '{:.2%}',
                     'CUT %': '{:.2%}'
                 })\
-                .applymap(color_red_if_low, subset=['CAN CUT %', 'CUT %'])\
+                .map(color_red_if_low, subset=['CAN CUT %', 'CUT %'])\
                 .set_properties(**{'background-color': '#f8fafc', 'color': '#000080', 'border-color': '#cbd5e1'})
 
                 st.dataframe(
