@@ -286,7 +286,7 @@ def load_data(url):
         
         num_cols = ['ORD QTY','CAN CUT QTY','CUT QTY','FAB Req','FAB RCVD', 'FABRIC USED',
                     'FABRIC LEFTOVER STOCK','STD Cons','CAD Cons',
-                    'ACHIEVED CONS','CAN CUT %','CUT %']
+                    'ACHIEVED CONS','CAN CUT %','CUT %', 'ROLL EXCESS', 'ROLL SHORTAGE']
         for c in num_cols:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors='coerce').fillna(0)
