@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import requests
 from io import BytesIO
 import json
@@ -399,7 +399,7 @@ else:
     if 'active_exception_view' not in st.session_state:
         st.session_state.active_exception_view = None
 
-    now_dt = datetime.utcnow() + timedelta(hours=5, minutes=30)
+    now_dt = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
     now_str = now_dt.strftime("%d-%b-%Y %I:%M %p")
 
     # ================= HEADER LAYOUT =================
@@ -711,13 +711,13 @@ else:
 
         st.markdown("<div style='height:25px'></div>", unsafe_allow_html=True)
 
-        components.html("""
+        st.html("""
         <script>
         window.addEventListener("cad_click", function() {
             window.parent.postMessage({type: "CAD_CLICK"}, "*");
         });
         </script>
-        """, height=0)
+        """)
 
         
 
