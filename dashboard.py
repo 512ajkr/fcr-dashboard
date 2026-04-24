@@ -915,7 +915,7 @@ else:
                 # Apply red color logic if the percentage columns exist
                 perc_cols = [c for c in ['CAN CUT %', 'CUT %'] if c in final_cols]
                 if perc_cols:
-                    styled_df = styled_df.applymap(color_red_if_low, subset=perc_cols)
+                    styled_df = styled_df.map(color_red_if_low, subset=perc_cols)
 
                 # 5. FINAL DISPLAY
                 st.dataframe(
