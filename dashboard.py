@@ -1098,7 +1098,7 @@ else:
                         can_to_cut_ratio = (s_cut / s_cancut) if s_cancut > 0 else 0 # Corrected: Cut / CanCut
                         savings_pct = ((avg_std - avg_ach) / avg_std) if avg_std > 0 else 0
                         savings_kg = s_ord * (avg_std - avg_ach)
-                        savings_lac = (savings_kg * 500) / 100000
+                        savings_lac = (savings_kg * 190) / 100000
 
                         # --- ACCUMULATE FOR GRAND TOTAL ---
                         gt_ord_qty += s_ord
@@ -1189,8 +1189,8 @@ else:
                         "Can Cut to Cut%": "Sum(Total CUT QTY) / Sum(Total CAN CUT QTY)",
                         "LEFTOVER STOCK": "Sum of all units Stock",
                         "Savings %": "(GT STD Cons - GT Achieved Cons) / GT STD Cons",
-                        "Savings (mtr)": "Sum of all units Savings (mtr)",
-                        "Savings (Lac)": "Sum of all units Savings (Lac)"
+                        "Savings (mtr)": "Formula: Total ORD QTY * (GT STD Cons - GT Achieved Cons)",
+                        "Savings (Lac)": "Formula: (Total Savings (mtr) * 190) / 100,000"
                     }
 
                     # 3. Create Display DataFrame (Formatted Strings)
